@@ -1,4 +1,6 @@
 from pyspark.sql.functions import col, when, concat, lit, sum as _sum
+from pyspark.sql import Window
+from pyspark.sql.functions import row_number
 
 # Step 1: Enrich adprofile
 adprofile_enriched_df = adprofile_filtered_df \
@@ -25,20 +27,20 @@ adstructure_selected_df = adstructure_filtered_df.select("YearMonth", col("ADStr
 
 agency_df = adprofile_enriched_df.filter(col("AGChannel") == "Agency") \
     .join(adstructure_selected_df, ["YearMonth", "OfficeCode"], "left") \
-    .join(prodtrans_agg_df, "AGCode", "left") \
     .withColumn("Manpower", lit(1))
 
 # Step 4: Get existing territories from Agency
 existing_territory_list = [row.Territory for row in agency_df.select("Territory").distinct().collect() if row.Territory is not None]
 
 # Step 5: Process Gallerie data
+# Deduplicate glstructure_filtered_df by OfficeCode to avoid multiple matches
+glstructure_deduped_df = glstructure_filtered_df.select(col("GL_StrucCode1").alias("Territory"), "OfficeCode") \
+    .withColumn("row_num", row_number().over(Window.partitionBy("OfficeCode").orderBy(col("Territory").desc_nulls_last()))) \
+    .filter(col("row_num") == 1) \
+    .drop("row_num")
+
 gallerie_df = adprofile_enriched_df.filter(col("AGChannel") == "Gallerie") \
-    .join(
-        glstructure_filtered_df.select(col("GL_StrucCode1").alias("Territory"), "OfficeCode"),
-        "OfficeCode",
-        "left"
-    ) \
-    .join(prodtrans_agg_df, "AGCode", "left") \
+    .join(glstructure_deduped_df, "OfficeCode", "left") \
     .withColumn(
         "Territory",
         when(
@@ -48,10 +50,14 @@ gallerie_df = adprofile_enriched_df.filter(col("AGChannel") == "Gallerie") \
     ) \
     .withColumn("Manpower", lit(1))
 
-# Step 6: Union Agency and Gallerie datasets
-combined_df = agency_df.unionByName(gallerie_df)
+# Step 6: Join with prodtrans_agg_df for both Agency and Gallerie
+agency_final_df = agency_df.join(prodtrans_agg_df, "AGCode", "left")
+gallerie_final_df = gallerie_df.join(prodtrans_agg_df, "AGCode", "left")
 
-# Step 7: Aggregate
+# Step 7: Union Agency and Gallerie datasets
+combined_df = agency_final_df.unionByName(gallerie_final_df)
+
+# Step 8: Aggregate
 result_df = combined_df.groupBy(
     "AGChannel", "YearMonth", "Territory", "OfficeCode", "segment_final"
 ).agg(
@@ -63,5 +69,5 @@ result_df = combined_df.groupBy(
     _sum("Case_IP_15_excl_digital").alias("Case_IP_15_excl_digital")
 )
 
-# Step 8: Display
+# Step 9: Display
 result_df.orderBy("AGChannel", "YearMonth", "Territory", "OfficeCode", "segment_final").display()
