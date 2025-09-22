@@ -1,88 +1,3 @@
-adprofile_enriched_df = adprofile_filtered_df \
-    .filter(col("AGSegName") != "Termination") \
-    .withColumn(
-        "segment_final",
-        when(
-            (col("AGSegName") == "SA"), "SA"
-        ).when(
-            (col("AGSegName").isin("Gold", "Platinum", "Diamond")) & (col("MonthOfService") <= 12),
-            "New PE"
-        ).when(
-            (col("AGSegName").isin("Gold", "Platinum", "Diamond")) & (col("MonthOfService") > 12),
-            col("AGSegName")
-        ).when(
-            (col("MonthOfService") >= 0) & (col("MonthOfService") <= 12),
-            concat(lit("M"), col("MonthOfService").cast("string"))
-        ).otherwise("M13+")
-    )
-
-adstructure_selected_df = adstructure_filtered_df.select(
-    col("YearMonth"),
-    col("ADStrucCode1").alias("ADStrucCode1"),
-    col("OfficeCode")
-)
-
-prodtrans_agg_df = prodtrans_filtered_df.groupBy("AGCode").agg(
-    _sum("APE").alias("APE"),
-    _sum("CaseCount").alias("Case"),
-    _sum(
-        when(col("IP") >= 15000000, col("CaseCount")).otherwise(0)
-    ).alias("Case_IP_15_excl_digital")
-).withColumn(
-    "Active_IP_15",
-    when(col("Case_IP_15_excl_digital") > 0, 1).otherwise(0)
-).withColumn(
-    "Active_net",
-    when(col("Case") > 0, 1).otherwise(0)
-)
-
-joined_df = adprofile_enriched_df.join(
-    adstructure_selected_df,
-    [
-        adprofile_enriched_df["YearMonth"] == adstructure_selected_df["YearMonth"],
-        adprofile_enriched_df["OfficeCode"] == adstructure_selected_df["OfficeCode"]
-    ],
-    "left"
-).withColumn(
-    "Territory",
-    when(col("AGChannel") == "Agency", col("ADStrucCode1")).otherwise(lit("GAL"))
-)
-
-final_df = joined_df.join(
-    prodtrans_agg_df,
-    joined_df.AGCode == prodtrans_agg_df.AGCode,
-    "left"
-).withColumn(
-    "Manpower",
-    when(col("AGSegName") == "Termination", 0).otherwise(1)
-)
-
-# Filter out Termination rows
-final_df_filtered = final_df.filter(col("AGSegName") != "Termination")
-
-result_df = final_df_filtered.groupBy(
-    col("AGChannel"),
-    adprofile_enriched_df["YearMonth"].alias("YearMonth"),
-    col("Territory"),
-    adstructure_selected_df["OfficeCode"].alias("OfficeCode"),
-    col("segment_final").alias("Segment_Final")
-).agg(
-    _sum("APE").alias("APE"),
-    _sum("Manpower").alias("Manpower"),
-    _sum("Active_net").alias("Active_net"),
-    _sum("Active_IP_15").alias("Active_IP_15"),
-    _sum("Case").alias("Case"),
-    _sum("Case_IP_15_excl_digital").alias("Case_IP_15_excl_digital")
-)
-
-display(result_df.orderBy(
-    col("AGChannel"),
-    col("YearMonth"),
-    col("Territory"),
-    col("OfficeCode"),
-    col("Segment_Final"))
-) 
-
 from pyspark.sql.functions import col, when, concat, lit, sum as _sum
 
 # Step 1: Enrich adprofile
@@ -97,37 +12,40 @@ adprofile_enriched_df = adprofile_filtered_df \
         .otherwise("M13+")
     )
 
-# Step 2: Join adstructure for Agency territories
-adstructure_selected_df = adstructure_filtered_df.select("YearMonth", "ADStrucCode1", "OfficeCode")
+# Step 2: Prepare prodtrans_agg_df
+prodtrans_agg_df = prodtrans_filtered_df.groupBy("AGCode").agg(
+    _sum("APE").alias("APE"),
+    _sum("CaseCount").alias("Case"),
+    _sum(when(col("IP") >= 15000000, col("CaseCount")).otherwise(0)).alias("Case_IP_15_excl_digital")
+).withColumn("Active_IP_15", when(col("Case_IP_15_excl_digital") > 0, 1).otherwise(0)) \
+ .withColumn("Active_net", when(col("Case") > 0, 1).otherwise(0))
+
+# Step 3: Process Agency data
+adstructure_selected_df = adstructure_filtered_df.select("YearMonth", col("ADStrucCode1").alias("Territory"), "OfficeCode")
 
 agency_df = adprofile_enriched_df.filter(col("AGChannel") == "Agency") \
     .join(adstructure_selected_df, ["YearMonth", "OfficeCode"], "left") \
-    .withColumn("Territory", col("ADStrucCode1")) \
     .join(prodtrans_agg_df, "AGCode", "left") \
-    .withColumn("Manpower", lit(1)) \
-    .withColumn("Active_net", when(col("Case") > 0, 1).otherwise(0)) \
-    .withColumn("Active_IP_15", when(col("Case_IP_15_excl_digital") > 0, 1).otherwise(0))
+    .withColumn("Manpower", lit(1))
 
-# Step 3: Get existing territories from Agency
+# Step 4: Get existing territories from Agency
 existing_territory_list = [row.Territory for row in agency_df.select("Territory").distinct().collect()]
 
-# Step 4: Process Gallerie profiles with new GL territories
+# Step 5: Process Gallerie data with glstructure
 gallerie_df = adprofile_enriched_df.filter(col("AGChannel") == "Gallerie") \
-    .join(glstructure_filtered_df.select("GL_StrucCode1", "OfficeCode"), "OfficeCode", "inner") \
+    .join(glstructure_filtered_df.select(col("GL_StrucCode1").alias("Territory"), "OfficeCode"), "OfficeCode", "inner") \
     .join(prodtrans_agg_df, "AGCode", "left") \
     .withColumn(
         "Territory",
-        when(~col("GL_StrucCode1").isin(existing_territory_list), "GAL").otherwise(col("GL_StrucCode1"))
+        when(~col("Territory").isin(existing_territory_list), "GAL").otherwise(col("Territory"))
     ) \
-    .withColumn("Manpower", lit(1)) \
-    .withColumn("Active_net", when(col("Case") > 0, 1).otherwise(0)) \
-    .withColumn("Active_IP_15", when(col("Case_IP_15_excl_digital") > 0, 1).otherwise(0))
+    .withColumn("Manpower", lit(1))
 
-# Step 5: Union Agency and Gallerie datasets
+# Step 6: Union Agency and Gallerie datasets
 combined_df = agency_df.unionByName(gallerie_df)
 
-# Step 6: Aggregate
-AG_All_Company_Segments = combined_df.groupBy(
+# Step 7: Aggregate
+result_df = combined_df.groupBy(
     "AGChannel", "YearMonth", "Territory", "OfficeCode", "segment_final"
 ).agg(
     _sum("APE").alias("APE"),
@@ -138,5 +56,5 @@ AG_All_Company_Segments = combined_df.groupBy(
     _sum("Case_IP_15_excl_digital").alias("Case_IP_15_excl_digital")
 )
 
-# Step 7: Display
-AG_All_Company_Segments.orderBy("AGChannel", "YearMonth", "Territory", "OfficeCode", "segment_final").display()
+# Step 8: Display
+result_df.orderBy("AGChannel", "YearMonth", "Territory", "OfficeCode", "segment_final").display()
