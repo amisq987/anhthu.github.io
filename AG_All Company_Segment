@@ -6,76 +6,42 @@ adprofile_enriched_df = adprofile_filtered_df \
     .withColumn(
         "segment_final",
         when(col("AGSegName") == "SA", "SA")
-        .when(col("AGSegName").isin("Gold", "Platinum", "Diamond") & (col("MonthOfService") <= 12), "New PE")
-        .when(col("AGSegName").isin("Gold", "Platinum", "Diamond") & (col("MonthOfService") > 12), col("AGSegName"))
-        .when((col("MonthOfService") >= 0) & (col("MonthOfService") <= 12), concat(lit("M"), col("MonthOfService").cast("string")))
+        .when((col("AGSegName").isin("Gold", "Platinum", "Diamond")) & (col("MonthOfService") <= 12), "New PE")
+        .when((col("AGSegName").isin("Gold", "Platinum", "Diamond")) & (col("MonthOfService") > 12), col("AGSegName"))
+        .when((col("MonthOfService").between(0, 12)), concat(lit("M"), col("MonthOfService").cast("string")))
         .otherwise("M13+")
     )
 
-# Step 2: Join adstructure to get Territory for Agency
+# Step 2: Join adstructure for Agency territories
 adstructure_selected_df = adstructure_filtered_df.select("YearMonth", "ADStrucCode1", "OfficeCode")
 
-joined_df = adprofile_enriched_df.join(
-    adstructure_selected_df,
-    ["YearMonth", "OfficeCode"],
-    "left"
-).withColumn(
-    "Territory",
-    when(col("AGChannel") == "Agency", col("ADStrucCode1")).otherwise(lit("GAL"))
-)
+agency_df = adprofile_enriched_df.filter(col("AGChannel") == "Agency") \
+    .join(adstructure_selected_df, ["YearMonth", "OfficeCode"], "left") \
+    .withColumn("Territory", col("ADStrucCode1")) \
+    .join(prodtrans_agg_df, "AGCode", "left") \
+    .withColumn("Manpower", lit(1)) \
+    .withColumn("Active_net", when(col("Case") > 0, 1).otherwise(0)) \
+    .withColumn("Active_IP_15", when(col("Case_IP_15_excl_digital") > 0, 1).otherwise(0))
 
-# Step 3: Join with prodtrans
-final_df = joined_df.join(
-    prodtrans_agg_df,
-    "AGCode",
-    "left"
-).withColumn(
-    "Manpower", lit(1)
-).withColumn(
-    "Active_net", when(col("Case") > 0, 1).otherwise(0)
-).withColumn(
-    "Active_IP_15", when(col("Case_IP_15_excl_digital") > 0, 1).otherwise(0)
-)
+# Step 3: Get existing territories from Agency
+existing_territory_list = [row.Territory for row in agency_df.select("Territory").distinct().collect()]
 
-# Step 4: Filter out Termination
-final_df_filtered = final_df.filter(col("AGSegName") != "Termination")
+# Step 4: Process Gallerie profiles with new GL territories
+gallerie_df = adprofile_enriched_df.filter(col("AGChannel") == "Gallerie") \
+    .join(glstructure_filtered_df.select("GL_StrucCode1", "OfficeCode"), "OfficeCode", "inner") \
+    .join(prodtrans_agg_df, "AGCode", "left") \
+    .withColumn(
+        "Territory",
+        when(~col("GL_StrucCode1").isin(existing_territory_list), "GAL").otherwise(col("GL_StrucCode1"))
+    ) \
+    .withColumn("Manpower", lit(1)) \
+    .withColumn("Active_net", when(col("Case") > 0, 1).otherwise(0)) \
+    .withColumn("Active_IP_15", when(col("Case_IP_15_excl_digital") > 0, 1).otherwise(0))
 
-# Step 5: Get existing territories
-existing_territory_list = [row.Territory for row in final_df_filtered.select("Territory").distinct().collect()]
+# Step 5: Union Agency and Gallerie datasets
+combined_df = agency_df.unionByName(gallerie_df)
 
-# Step 6: Get new GL territories not in existing list
-glstructure_new_territory_df = glstructure_filtered_df.select(
-    col("GL_StrucCode1"), 
-    col("OfficeCode")
-).filter(~col("GL_StrucCode1").isin(existing_territory_list))
-
-# Step 7: Join Gallerie profiles with new GL territories
-gallerie_profile_df = adprofile_enriched_df.filter(col("AGChannel") == "Gallerie")
-
-gallerie_joined_df = gallerie_profile_df.join(
-    glstructure_new_territory_df,
-    "OfficeCode",
-    "inner"
-).join(
-    prodtrans_agg_df,
-    "AGCode",
-    "left"
-).withColumn(
-    "Territory",
-    when(col("GL_StrucCode1").isin(existing_territory_list), col("GL_StrucCode1")).otherwise(lit("GAL"))
-).withColumn(
-    "Manpower", lit(1)
-).withColumn(
-    "Active_net", when(col("Case") > 0, 1).otherwise(0)
-).withColumn(
-    "Active_IP_15", when(col("Case_IP_15_excl_digital") > 0, 1).otherwise(0)
-)
-
-
-# Step 9: Union both datasets
-combined_df = final_df_filtered_sel.unionByName(gallerie_joined_sel)
-
-# Step 10: Aggregate
+# Step 6: Aggregate
 AG_All_Company_Segments = combined_df.groupBy(
     "AGChannel", "YearMonth", "Territory", "OfficeCode", "segment_final"
 ).agg(
@@ -87,7 +53,5 @@ AG_All_Company_Segments = combined_df.groupBy(
     _sum("Case_IP_15_excl_digital").alias("Case_IP_15_excl_digital")
 )
 
-# Step 11: Display
-display(AG_All_Company_Segments.orderBy(
-    "AGChannel", "YearMonth", "Territory", "OfficeCode", "segment_final"
-))
+# Step 7: Display
+AG_All_Company_Segments.orderBy("AGChannel", "YearMonth", "Territory", "OfficeCode", "segment_final").display()
