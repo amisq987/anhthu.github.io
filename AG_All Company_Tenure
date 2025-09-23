@@ -141,7 +141,7 @@ tenure_agency_df_1_filtered = tenure_agency_df_1_agency.unionByName(tenure_agenc
 
 # Step 9: Display the result with columns in the same order as orderBy
 orderby_cols = [
-    "AGChannel", "YearMonth", "Territory", "OfficeCode", "GACode1", "GASegName",
+    "AGChannel", "YearMonth", "Territory", "OfficeCode", "GACode", "GASegName",
     "ProvinceName", "ProvinceCode", "Tenure_Final",
     "APE", "Manpower", "Active_net", "Active_IP_15", "Case", "Case_IP_15_excl_digital"
 ]
