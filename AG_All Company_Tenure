@@ -1,6 +1,9 @@
-from pyspark.sql.functions import col, when, lit, regexp_replace, lower, trim, initcap, coalesce, udf
+from pyspark.sql.functions import col, when, lit, regexp_replace, lower, trim, initcap, coalesce, udf, sum as _sum
 from pyspark.sql.types import StringType
+from pyspark.sql.window import Window
+from pyspark.sql.functions import row_number
 
+# UDFs (unchanged)
 import unicodedata
 def remove_accents(text):
     if text is None:
@@ -26,15 +29,113 @@ def format_province_name(name):
     return name
 format_province_name_udf = udf(format_province_name, StringType())
 
+# Step 1: Prepare adprofile_enriched_df
 adprofile_enriched_df_1 = adprofile_filtered_df \
     .filter(col("AGSegName") != "Termination") \
     .withColumn(
         "ProvinceName",
         format_province_name_udf(
-            coalesce(col("ContactProvince_Name"), col("PermanentProvince_Name"))
+            coalesce(col("ContactProvince_Name"), col("PermanentProvince_Name"), lit("Unknown"))
         )
     ) \
     .withColumn(
+        "ProvinceCode",
+        when(col("PermanentProvince_Code").isNotNull() & col("PermanentProvince_Code").startswith("0"),
+             col("PermanentProvince_Code").substr(2, 1))
+        .otherwise(coalesce(col("PermanentProvince_Code"), lit("Unknown")))
+    ) \
+    .withColumn(
+        "GACode1",
+        coalesce(col("GACode"), col("GACoverCode"), lit("Unknown"))
+    ) \
+    .withColumn(
+        "Tenure_Final",
+        when(col("AGSegName") == "SA", "SA")
+        .when(col("MonthOfService").between(0, 12), concat(lit("M"), col("MonthOfService").cast("string")))
+        .otherwise(lit("Unknown"))
+    )
+
+# Step 2: Prepare prodtrans_agg_df (unchanged)
+prodtrans_agg_df_1 = prodtrans_filtered_df.groupBy("AGCode").agg(
+    _sum("APE").alias("APE"),
+    _sum("CaseCount").alias("Case"),
+    _sum(when(col("IP") >= 15000000, col("CaseCount")).otherwise(0)).alias("Case_IP_15_excl_digital")
+).withColumn("Active_IP_15", when(col("Case_IP_15_excl_digital") > 0, 1).otherwise(0)) \
+ .withColumn("Active_net", when(col("Case") > 0, 1).otherwise(0))
+
+# Step 3: Process Agency data
+adstructure_selected_df_1 = adstructure_filtered_df.select(
+    "YearMonth", col("ADStrucCode1").alias("Territory"), "OfficeCode", col("GASegName").alias("GASegName_struct")
+)
+
+agency_df_1 = adprofile_enriched_df_1.filter(col("AGChannel") == "Agency") \
+    .join(adstructure_selected_df_1, ["YearMonth", "OfficeCode"], "left") \
+    .withColumn("Manpower", lit(1)) \
+    .withColumn("GASegName", coalesce(col("GASegName_struct"), col("AGSegName"), lit("Unknown"))) \
+    .drop("GASegName_struct")
+
+# Step 4: Get existing territories from Agency
+existing_territory_list_1 = [row.Territory for row in agency_df_1.select("Territory").distinct().collect() if row.Territory is not None]
+
+# Step 5: Process Gallerie data
+glstructure_deduped_df_1 = glstructure_filtered_df.select(col("GL_StrucCode1").alias("Territory"), "OfficeCode") \
+    .withColumn("row_num", row_number().over(Window.partitionBy("OfficeCode").orderBy(col("Territory").desc_nulls_last()))) \
+    .filter(col("row_num") == 1) \
+    .drop("row_num")
+
+gallerie_df_1 = adprofile_enriched_df_1.filter(col("AGChannel") == "Gallerie") \
+    .join(glstructure_deduped_df_1, "OfficeCode", "left") \
+    .withColumn(
+        "Territory",
+        when(
+            col("Territory").isNull() | ~col("Territory").isin(existing_territory_list_1),
+            "GAL"
+        ).otherwise(col("Territory"))
+    ) \
+    .withColumn("Manpower", lit(1)) \
+    .withColumn("GASegName", coalesce(col("AGSegName"), lit("Unknown")))
+
+# Step 6: Join with prodtrans_agg_df for both Agency and Gallerie
+agency_final_df_1 = agency_df_1.join(prodtrans_agg_df_1, agency_df_1.GACode1 == prodtrans_agg_df_1.AGCode, "left") \
+    .withColumn("APE", coalesce(col("APE"), lit(0))) \
+    .withColumn("Case", coalesce(col("Case"), lit(0))) \
+    .withColumn("Case_IP_15_excl_digital", coalesce(col("Case_IP_15_excl_digital"), lit(0))) \
+    .withColumn("Active_IP_15", coalesce(col("Active_IP_15"), lit(0))) \
+    .withColumn("Active_net", coalesce(col("Active_net"), lit(0)))
+
+gallerie_final_df_1 = gallerie_df_1.join(prodtrans_agg_df_1, gallerie_df_1.GACode1 == prodtrans_agg_df_1.AGCode, "left") \
+    .withColumn("APE", coalesce(col("APE"), lit(0))) \
+    .withColumn("Case", coalesce(col("Case"), lit(0))) \
+    .withColumn("Case_IP_15_excl_digital", coalesce(col("Case_IP_15_excl_digital"), lit(0))) \
+    .withColumn("Active_IP_15", coalesce(col("Active_IP_15"), lit(0))) \
+    .withColumn("Active_net", coalesce(col("Active_net"), lit(0)))
+
+# Step 7: Union Agency and Gallerie datasets
+final_cols = [
+    "AGChannel", "YearMonth", "Territory", "OfficeCode", "GACode1", "GASegName",
+    "ProvinceName", "ProvinceCode", "Tenure_Final", "APE", "Manpower",
+    "Active_net", "Active_IP_15", "Case", "Case_IP_15_excl_digital"
+]
+
+agency_final_df_1_sel = agency_final_df_1.select(final_cols)
+gallerie_final_df_1_sel = gallerie_final_df_1.select(final_cols)
+
+tenure_combined_df_1 = agency_final_df_1_sel.unionByName(gallerie_final_df_1_sel)
+
+# Step 8: Select and aggregate
+tenure_agency_df_1 = tenure_combined_df_1.groupBy(
+    "AGChannel", "YearMonth", "Territory", "OfficeCode", "GACode1", "GASegName", "ProvinceName", "ProvinceCode", "Tenure_Final"
+).agg(
+    _sum("APE").alias("APE"),
+    _sum("Manpower").alias("Manpower"),
+    _max("Active_net").alias("Active_net"),  # Use max to get 1 if any row is active
+    _max("Active_IP_15").alias("Active_IP_15"),  # Use max to get 1 if any row is active
+    _sum("Case").alias("Case"),
+    _sum("Case_IP_15_excl_digital").alias("Case_IP_15_excl_digital")
+)
+
+# Step 9: Display the result
+display(tenure_agency_df_1.orderBy("AGChannel", "YearMonth", "Territory", "OfficeCode", "GACode1", "GASegName", "ProvinceName", "ProvinceCode", "Tenure_Final"))    .withColumn(
         "ProvinceCode",
         when(col("PermanentProvince_Code").startswith("0"), col("PermanentProvince_Code").substr(2, 1))
         .otherwise(col("PermanentProvince_Code"))
