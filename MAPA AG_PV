@@ -1,6 +1,7 @@
 from pyspark.sql.functions import (
-    col, when, concat, lit, coalesce, regexp_replace, lpad, floor, expr
+    col, when, concat, lit, coalesce, regexp_replace, lpad, floor, expr, row_number
 )
+from pyspark.sql.window import Window
 
 # STEP 1: Chuẩn hóa adprofile
 adprofile_sel = adprofile_filtered_df.select(
@@ -8,7 +9,7 @@ adprofile_sel = adprofile_filtered_df.select(
 ).withColumn(
     "Tenure_PV", col("MonthOfService")
 ).withColumn(
-    "Tenure_AD", when(col("MonthOfService").isNotNull(), col("MonthOfService") - 1)
+    "Tenure_AD", when(col("MonthOfService").isNotNull() & (col("MonthOfService") > 0), col("MonthOfService") - 1).otherwise(0)
 ).withColumn(
     "Tenure_AD_Final",
     when(col("AGSegName") == "SA", "SA")
@@ -16,7 +17,7 @@ adprofile_sel = adprofile_filtered_df.select(
     .when((col("AGSegName") == "New Recruit") & col("Tenure_PV").isNull(), "M0")
     .when(col("Tenure_PV").isNull(), "M13+")
     .when(col("Tenure_PV") >= 13, "M13+")
-    .otherwise(concat(lit("M"), col("Tenure_AD").cast("string")))
+    .otherwise(when(col("Tenure_AD").isNotNull(), concat(lit("M"), col("Tenure_AD").cast("string"))).otherwise("M0"))
 ).withColumn(
     "Tenure_PV_Target", concat(col("AGLevel"), col("MonthOfService").cast("string"))
 ).withColumn(
@@ -37,13 +38,13 @@ adprofile_sel = adprofile_filtered_df.select(
 prodtrans_sel = prodtrans_filtered_df.select(
     "YearMonth", "AGCode", "APE_Iss", "APE_Sub", "Case_Iss", "Case_Sub", "IP"
 ).withColumn(
-    "APE_Net", col("APE_Iss") - col("APE_Sub")
+    "APE_Net", coalesce(col("APE_Iss"), 0) - coalesce(col("APE_Sub"), 0)
 ).withColumn(
-    "Case_Net", col("Case_Iss") - col("Case_Sub")
+    "Case_Net", coalesce(col("Case_Iss"), 0) - coalesce(col("Case_Sub"), 0)
 ).withColumn(
     "Active_Net", when(col("Case_Net") > 0, 1).otherwise(0)
 ).withColumn(
-    "Active_IP_15", when(col("IP") >= 15000000, 1).otherwise(0)
+    "Active_IP_15", when(coalesce(col("IP"), 0) >= 15000000, 1).otherwise(0)
 )
 
 # STEP 3: Join adprofile và prodtrans
@@ -56,6 +57,10 @@ df = df.withColumn("Year", floor(col("YearMonth") / 100)) \
        .withColumn("NextMonth", when(col("Month") == 12, lit(1)).otherwise(col("Month") + 1)) \
        .withColumn("Next_YearMonth", (col("NextYear") * 100 + col("NextMonth")).cast("int"))
 
+# Lọc các bản ghi có Next_YearMonth hợp lệ
+max_yearmonth = adprofile_filtered_df.agg({"YearMonth": "max"}).collect()[0][0]
+df = df.filter(col("Next_YearMonth") <= max_yearmonth)
+
 # STEP 6: Join AGLevel của tháng kế tiếp
 adprofile_next = adprofile_filtered_df.select(
     col("YearMonth").alias("Next_YearMonth"),
@@ -64,11 +69,9 @@ adprofile_next = adprofile_filtered_df.select(
     col("AGChannel").alias("Channels")
 )
 
-# Đặt alias cho cả hai bảng
 df_main = df.alias("main")
 adprofile_next = adprofile_next.alias("next")
 
-# Join với alias rõ ràng
 df = df_main.join(
     adprofile_next,
     (col("main.Next_YearMonth") == col("next.Next_YearMonth")) & (col("main.AGCode") == col("next.AGCode")),
@@ -80,23 +83,20 @@ df = df.withColumn(
     "Leader_movement",
     when((col("AGLevel") == "AG") & (col("AGLevel_Nextmonth") == "PM"), "P.PM")
     .when((col("AGLevel") == "AG") & (col("AGLevel_Nextmonth") == "UM"), "P.UM")
-    .when((col("AGLevel") == "AG") & col("AGLevel_Nextmonth").isNull(), "T.AG")
+    .when((col("AGLevel") == "AG") & col("AGLevel_Nextmonth").isNull(), "Unknown")  # Thay T.AG
     .when((col("AGLevel") == "PM") & (col("AGLevel_Nextmonth") == "UM"), "P.UM")
     .when((col("AGLevel") == "PM") & (col("AGLevel_Nextmonth") == "AG"), "D.PM")
-    .when((col("AGLevel") == "PM") & col("AGLevel_Nextmonth").isNull(), "T.PM")
+    .when((col("AGLevel") == "PM") & col("AGLevel_Nextmonth").isNull(), "Unknown")  # Thay T.PM
     .when((col("AGLevel") == "UM") & (col("AGLevel_Nextmonth") == "BM"), "P.BM")
     .when((col("AGLevel") == "UM") & (col("AGLevel_Nextmonth") == "PM"), "D.UM")
     .when((col("AGLevel") == "UM") & (col("AGLevel_Nextmonth") == "AG"), "D.UM")
-    .when((col("AGLevel") == "UM") & col("AGLevel_Nextmonth").isNull(), "T.UM")
+    .when((col("AGLevel") == "UM") & col("AGLevel_Nextmonth").isNull(), "Unknown")  # Thay T.UM
     .when((col("AGLevel") == "BM") & (col("AGLevel_Nextmonth").isin("UM", "PM", "AG")), "D.BM")
-    .when((col("AGLevel") == "BM") & col("AGLevel_Nextmonth").isNull(), "T.BM")
+    .when((col("AGLevel") == "BM") & col("AGLevel_Nextmonth").isNull(), "Unknown")  # Thay T.BM
     .otherwise("Unchanged")
 )
 
-# STEP 8: Chọn cột và gom nhóm, chỉ hiển thị các AGCode unique nếu AGChannel là Gallerie (ở adprofile) hoặc Channels là Gallerie (ở adprofile_next), không hiển thị AGChannel/Channels
-from pyspark.sql.window import Window
-from pyspark.sql.functions import row_number
-
+# STEP 8: Chọn cột và gom nhóm
 final_cols = [
     "YearMonth", "AGCode", "AGSegName", "AGLevel", "MonthOfService",
     "Tenure_AD", "Tenure_AD_Final", "Tenure_PV_Target", "Tenure_PV",
@@ -104,13 +104,15 @@ final_cols = [
     "Next_YearMonth", "AGLevel_Nextmonth", "Leader_movement"
 ]
 
-# Lấy unique AGCode theo YearMonth
 window_spec = Window.partitionBy("YearMonth", "AGCode").orderBy(col("AGCode"))
 df_unique = df.filter(
     (col("AGChannel") == "Gallerie") | (col("Channels") == "Gallerie")
 ).withColumn(
     "rn", row_number().over(window_spec)
 ).filter(col("rn") == 1).drop("rn")
+
+# Kiểm tra trùng lặp trước khi hiển thị
+df_unique.groupBy("YearMonth", "AGCode").count().filter(col("count") > 1).show()
 
 display(
     df_unique.select(final_cols).orderBy(col("MonthOfService").desc())
