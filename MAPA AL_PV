@@ -1,4 +1,4 @@
-code đang theo logic sau: chỉ hiển thị các rows có agchannel thuộc gallerie, Hãy tạo cho tôi một đoạn code extract dữ liệu từ các database tạo thành các cột dưới đây:
+Hãy thẩm định, code đang theo logic sau: chỉ hiển thị các rows có agchannel thuộc gallerie, Hãy tạo cho tôi một đoạn code extract dữ liệu từ các database tạo thành các cột dưới đây:
 Year Month tại các bảng adprofile, prodtrans, ad-agprofile,..
 , LeaderCode tại 2 bảng adprofile, ad_agprofile
 , LeaderLevel có thể tìm, liên kết thông qua leadercode trùng với agcode (adprofile, prodtrans) và từ các agcode trùng thì mình sẽ liên kết với cột aglevel (adprofile) để tìm ra được leaderlevel
