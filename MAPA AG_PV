@@ -1,0 +1,107 @@
+from pyspark.sql.functions import (
+    col, when, concat, lit, coalesce, regexp_replace, lpad, floor, expr
+)
+
+# STEP 1: Chuẩn hóa adprofile
+adprofile_sel = adprofile_filtered_df.select(
+    "YearMonth", "AGCode", "AGSegName", "AGLevel", "MonthOfService"
+).withColumn(
+    "Tenure_PV", col("MonthOfService")
+).withColumn(
+    "Tenure_AD", when(col("MonthOfService").isNotNull(), col("MonthOfService") - 1)
+).withColumn(
+    "Tenure_AD_Final",
+    when(col("AGSegName") == "SA", "SA")
+    .when((col("AGSegName") == "1-3mth") & col("Tenure_PV").isNull(), "M1")
+    .when((col("AGSegName") == "New Recruit") & col("Tenure_PV").isNull(), "M0")
+    .when(col("Tenure_PV").isNull(), "M13+")
+    .when(col("Tenure_PV") >= 13, "M13+")
+    .otherwise(concat(lit("M"), col("Tenure_AD").cast("string")))
+).withColumn(
+    "Tenure_PV_Target", concat(col("AGLevel"), col("MonthOfService").cast("string"))
+).withColumn(
+    "Segment_AD",
+    when((col("AGSegName").isin("Diamond", "Platinum", "Gold")) & (col("Tenure_PV") <= 12), "New PE")
+    .when((col("AGSegName").isin("Diamond", "Platinum", "Gold")) & (col("Tenure_PV") > 12), col("AGSegName"))
+    .when((col("AGSegName") == "New Recruit") & col("Tenure_PV").isNull(), "M0")
+    .when((col("AGSegName") == "1-3mth") & col("Tenure_PV").isNull(), "M1")
+    .when(col("AGSegName") == "SA", col("AGSegName"))
+    .when(col("Tenure_PV") >= 13, "M13+")
+    .otherwise(col("Tenure_AD_Final"))
+).withColumn(
+    "Segment_AD_Final",
+    when(col("Segment_AD") == "0", col("AGSegName")).otherwise(col("Segment_AD"))
+)
+
+# STEP 2: Chuẩn hóa prodtrans
+prodtrans_sel = prodtrans_filtered_df.select(
+    "YearMonth", "AGCode", "APE_Iss", "APE_Sub", "Case_Iss", "Case_Sub", "IP"
+).withColumn(
+    "APE_Net", col("APE_Iss") - col("APE_Sub")
+).withColumn(
+    "Case_Net", col("Case_Iss") - col("Case_Sub")
+).withColumn(
+    "Active_Net", when(col("Case_Net") > 0, 1).otherwise(0)
+).withColumn(
+    "Active_IP_15", when(col("IP") >= 15000000, 1).otherwise(0)
+)
+
+# STEP 3: Join adprofile và prodtrans
+df = adprofile_sel.join(prodtrans_sel, on=["YearMonth", "AGCode"], how="left")
+
+# STEP 4: Met Target placeholder
+df = df.withColumn("Met_Target", lit(None))
+
+# STEP 5: Tính Next Month
+df = df.withColumn("Year", floor(col("YearMonth") / 100)) \
+       .withColumn("Month", col("YearMonth") % 100) \
+       .withColumn("NextYear", when(col("Month") == 12, col("Year") + 1).otherwise(col("Year"))) \
+       .withColumn("NextMonth", when(col("Month") == 12, lit(1)).otherwise(col("Month") + 1)) \
+       .withColumn("Next_YearMonth", (col("NextYear") * 100 + col("NextMonth")).cast("int"))
+
+# STEP 6: Join AGLevel của tháng kế tiếp
+adprofile_next = adprofile_filtered_df.select(
+    col("YearMonth").alias("Next_YearMonth"),
+    "AGCode",
+    col("AGLevel").alias("AGLevel_Nextmonth")
+)
+
+# Đặt alias cho cả hai bảng
+df_main = df.alias("main")
+adprofile_next = adprofile_next.alias("next")
+
+# Join với alias rõ ràng
+df = df_main.join(
+    adprofile_next,
+    (col("main.Next_YearMonth") == col("next.Next_YearMonth")) & (col("main.AGCode") == col("next.AGCode")),
+    how="left"
+).drop(col("next.Next_YearMonth")).drop(col("next.AGCode"))
+
+
+# STEP 7: Tính Leader Movement
+df = df.withColumn(
+    "Leader_movement",
+    when((col("AGLevel") == "AG") & (col("AGLevel_Nextmonth") == "PM"), "P.PM")
+    .when((col("AGLevel") == "AG") & (col("AGLevel_Nextmonth") == "UM"), "P.UM")
+    .when((col("AGLevel") == "AG") & col("AGLevel_Nextmonth").isNull(), "T.AG")
+    .when((col("AGLevel") == "PM") & (col("AGLevel_Nextmonth") == "UM"), "P.UM")
+    .when((col("AGLevel") == "PM") & (col("AGLevel_Nextmonth") == "AG"), "D.PM")
+    .when((col("AGLevel") == "PM") & col("AGLevel_Nextmonth").isNull(), "T.PM")
+    .when((col("AGLevel") == "UM") & (col("AGLevel_Nextmonth") == "BM"), "P.BM")
+    .when((col("AGLevel") == "UM") & (col("AGLevel_Nextmonth") == "PM"), "D.UM")
+    .when((col("AGLevel") == "UM") & (col("AGLevel_Nextmonth") == "AG"), "D.UM")
+    .when((col("AGLevel") == "UM") & col("AGLevel_Nextmonth").isNull(), "T.UM")
+    .when((col("AGLevel") == "BM") & (col("AGLevel_Nextmonth").isin("UM", "PM", "AG")), "D.BM")
+    .when((col("AGLevel") == "BM") & col("AGLevel_Nextmonth").isNull(), "T.BM")
+    .otherwise("Unchanged")
+)
+
+# STEP 8: Chọn cột và gom nhóm
+final_cols = [
+    "YearMonth", "AGCode", "AGSegName", "AGLevel", "MonthOfService",
+    "Tenure_AD", "Tenure_AD_Final", "Tenure_PV_Target", "Tenure_PV",
+    "IP", "Case_Iss", "APE_Net", "Case_Net", "Active_Net", "Active_IP_15",
+    "Met_Target", "Next_YearMonth", "AGLevel_Nextmonth", "Leader_movement"
+]
+
+display(df.select(final_cols))
