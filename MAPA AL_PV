@@ -1,0 +1,78 @@
+from pyspark.sql.functions import col, when, lit, sum as _sum, floor
+
+# Extract Gallerie agents from adprofile
+gallerie_df = adprofile_filtered_df.filter(col("AGChannel") == "Gallerie").select(
+    "YearMonth", "AGCode", "LeaderCode", "AGSegName", "MonthOfService"
+)
+
+# Extract Gallerie agents from prodtrans
+prodtrans_gallerie_df = prodtrans_filtered_df.join(
+    gallerie_df.select("AGCode").distinct(), "AGCode", "inner"
+)
+
+# Extract Gallerie agents from ad_agprofile
+ad_agprofile_gallerie_df = ad_agsprofile_filtered_df.filter(col("AGChannel") == "Gallerie").select(
+    "YearMonth", "AGCode", "LeaderCode"
+)
+
+# LeaderLevel: join adprofile (AGCode=LeaderCode) to get AGLevel
+leader_level_df = adprofile_filtered_df.select(
+    col("AGCode").alias("LeaderCode"), col("AGLevel").alias("LeaderLevel")
+).distinct()
+
+# Join LeaderLevel to gallerie_df
+gallerie_with_leaderlevel_df = gallerie_df.join(
+    leader_level_df, "LeaderCode", "left"
+)
+
+# Leader with NewRecruit: 1 if any AGCode under LeaderCode has AGSegName == "New Recruit"
+leader_newrecruit_df = gallerie_df.filter(col("AGSegName") == "New Recruit") \
+    .groupBy("LeaderCode").agg(lit(1).alias("Leader_with_NewRecruit"))
+
+# Leader has M1M2 Active: 1 if any AGCode under LeaderCode has AGSegName == "1-3mth" and MonthOfService in (1,2) and CaseCount > 0
+m1m2_active_df = prodtrans_gallerie_df.join(
+    gallerie_df, ["AGCode", "YearMonth"], "inner"
+).filter(
+    (col("AGSegName") == "1-3mth") & (col("MonthOfService").isin([1,2])) & (col("CaseCount") > 0)
+).groupBy("LeaderCode").agg(lit(1).alias("Leader_has_M1M2_Active"))
+
+# NewRecruit DirectUnit: sum CaseCount of AGCode under LeaderCode with AGSegName == "New Recruit"
+newrecruit_casecount_df = prodtrans_gallerie_df.join(
+    gallerie_df, ["AGCode", "YearMonth"], "inner"
+).filter(col("AGSegName") == "New Recruit") \
+ .groupBy("LeaderCode").agg(_sum("CaseCount").alias("NewRecruit_DirectUnit"))
+
+# M1M2Active IPNet: sum IP_Net = IP_Iss - IP_Sub for AGCode under LeaderCode with AGSegName == "1-3mth", MonthOfService in (1,2), CaseCount > 0
+prodtrans_ipnet_df = prodtrans_gallerie_df.withColumn("IP_Net", col("IP_Iss") - col("IP_Sub"))
+m1m2active_ipnet_df = prodtrans_ipnet_df.join(
+    gallerie_df, ["AGCode", "YearMonth"], "inner"
+).filter(
+    (col("AGSegName") == "1-3mth") & (col("MonthOfService").isin([1,2])) & (col("CaseCount") > 0)
+).groupBy("LeaderCode").agg(_sum("IP_Net").alias("M1M2Active_IPNet"))
+
+# NextMonth logic
+gallerie_with_leaderlevel_df = gallerie_with_leaderlevel_df.withColumn(
+    "Year", floor(col("YearMonth") / 100)
+).withColumn(
+    "Month", col("YearMonth") % 100
+).withColumn(
+    "NextYear", when(col("Month") == 12, col("Year") + 1).otherwise(col("Year"))
+).withColumn(
+    "NextMonth", when(col("Month") == 12, lit(1)).otherwise(col("Month") + 1)
+).withColumn(
+    "NextYearMonth", (col("NextYear") * 100 + col("NextMonth")).cast("int")
+)
+
+# Combine all features
+result_df = gallerie_with_leaderlevel_df \
+    .join(leader_newrecruit_df, "LeaderCode", "left") \
+    .join(m1m2_active_df, "LeaderCode", "left") \
+    .join(newrecruit_casecount_df, "LeaderCode", "left") \
+    .join(m1m2active_ipnet_df, "LeaderCode", "left") \
+    .select(
+        "YearMonth", "LeaderCode", "LeaderLevel",
+        "Leader_with_NewRecruit", "Leader_has_M1M2_Active",
+        "NewRecruit_DirectUnit", "M1M2Active_IPNet", "NextYearMonth"
+    ).distinct()
+
+display(result_df.orderBy("YearMonth", "LeaderCode"))
