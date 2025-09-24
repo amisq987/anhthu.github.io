@@ -4,7 +4,7 @@ from pyspark.sql.functions import (
 
 # STEP 1: Chuẩn hóa adprofile
 adprofile_sel = adprofile_filtered_df.select(
-    "YearMonth", "AGCode", "AGSegName", "AGLevel", "MonthOfService"
+    "YearMonth", "AGCode", "AGSegName", "AGLevel", "MonthOfService", "AGChannel"
 ).withColumn(
     "Tenure_PV", col("MonthOfService")
 ).withColumn(
@@ -49,9 +49,6 @@ prodtrans_sel = prodtrans_filtered_df.select(
 # STEP 3: Join adprofile và prodtrans
 df = adprofile_sel.join(prodtrans_sel, on=["YearMonth", "AGCode"], how="left")
 
-# STEP 4: Met Target placeholder
-df = df.withColumn("Met_Target", lit(None))
-
 # STEP 5: Tính Next Month
 df = df.withColumn("Year", floor(col("YearMonth") / 100)) \
        .withColumn("Month", col("YearMonth") % 100) \
@@ -63,7 +60,8 @@ df = df.withColumn("Year", floor(col("YearMonth") / 100)) \
 adprofile_next = adprofile_filtered_df.select(
     col("YearMonth").alias("Next_YearMonth"),
     "AGCode",
-    col("AGLevel").alias("AGLevel_Nextmonth")
+    col("AGLevel").alias("AGLevel_Nextmonth"),
+    col("AGChannel").alias("Channels")
 )
 
 # Đặt alias cho cả hai bảng
@@ -76,7 +74,6 @@ df = df_main.join(
     (col("main.Next_YearMonth") == col("next.Next_YearMonth")) & (col("main.AGCode") == col("next.AGCode")),
     how="left"
 ).drop(col("next.Next_YearMonth")).drop(col("next.AGCode"))
-
 
 # STEP 7: Tính Leader Movement
 df = df.withColumn(
@@ -96,12 +93,25 @@ df = df.withColumn(
     .otherwise("Unchanged")
 )
 
-# STEP 8: Chọn cột và gom nhóm
+# STEP 8: Chọn cột và gom nhóm, chỉ hiển thị các AGCode unique nếu AGChannel là Gallerie (ở adprofile) hoặc Channels là Gallerie (ở adprofile_next), không hiển thị AGChannel/Channels
+from pyspark.sql.window import Window
+from pyspark.sql.functions import row_number
+
 final_cols = [
     "YearMonth", "AGCode", "AGSegName", "AGLevel", "MonthOfService",
     "Tenure_AD", "Tenure_AD_Final", "Tenure_PV_Target", "Tenure_PV",
     "IP", "Case_Iss", "APE_Net", "Case_Net", "Active_Net", "Active_IP_15",
-    "Met_Target", "Next_YearMonth", "AGLevel_Nextmonth", "Leader_movement"
+    "Next_YearMonth", "AGLevel_Nextmonth", "Leader_movement"
 ]
 
-display(df.select(final_cols))
+# Lấy unique AGCode theo YearMonth
+window_spec = Window.partitionBy("YearMonth", "AGCode").orderBy(col("AGCode"))
+df_unique = df.filter(
+    (col("AGChannel") == "Gallerie") | (col("Channels") == "Gallerie")
+).withColumn(
+    "rn", row_number().over(window_spec)
+).filter(col("rn") == 1).drop("rn")
+
+display(
+    df_unique.select(final_cols).orderBy(col("MonthOfService").desc())
+)
