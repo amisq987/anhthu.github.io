@@ -1,3 +1,18 @@
+code đang theo logic sau: chỉ hiển thị các rows có agchannel thuộc gallerie, Hãy tạo cho tôi một đoạn code extract dữ liệu từ các database tạo thành các cột dưới đây:
+Year Month tại các bảng adprofile, prodtrans, ad-agprofile,..
+, LeaderCode tại 2 bảng adprofile, ad_agprofile
+, LeaderLevel có thể tìm, liên kết thông qua leadercode trùng với agcode (adprofile, prodtrans) và từ các agcode trùng thì mình sẽ liên kết với cột aglevel (adprofile) để tìm ra được leaderlevel
+, Leader with NewRecruit: xác định theo logic sau: các leadercode có agcode nào thỏa mãn điều kiện: col("AGSegName") == "New Recruit", nếu điều kiện đúng thì 1, còn điều kiện sai thì null
+, Leader has M1M2 Active:    xác định theo logic sau: các leadercode có agcode nào thỏa mãn điều kiện:when((col("AGSegName") == "1-3mth") & col("MonthOfService ) có giá trị 1 hoặc 2 và casecount của các agcode này > 0
+, NewRecruit DirectUnit: tổng các casecount của agcode thuộc leadercode có col("AGSegName") == "New Recruit" 
+, M1M1Active IPNet: tổng các IP_Net = IP_Iss – IP_Sub (các cột từ bảng prodtrans) của agcode thuộc leadercode nào thỏa mãn điều kiện:when((col("AGSegName") == "1-3mth") & col("MonthOfService ) có giá trị 1 hoặc 2 và casecount của các agcode này > 0
+, NextMonth logic tương tự code đã cho     #"Added Custom" = Table.AddColumn(#"Changed Type", "Next Month", each let Year = Number.RoundDown([Year Month] / 100),
+    Month = Number.Mod([Year Month], 100),
+    NextYear = if Month = 12 then Year + 1 else Year,
+    NextMonth = if Month = 12 then 1 else Month + 1,
+    NextYearMonth = Text.PadStart(Text.From(NextYear), 4, "0") & Text.PadStart(Text.From(NextMonth), 2, "0")
+ 
+
 from pyspark.sql.functions import col, when, lit, sum as _sum, floor
 
 # Extract Gallerie agents from adprofile
