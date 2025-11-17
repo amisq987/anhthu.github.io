@@ -1,6 +1,5 @@
 import os
 import pandas as pd
-import time
 from datetime import datetime
 import pythoncom
 import win32com.client as win32
@@ -74,7 +73,6 @@ print(f"🔎 PERIOD cần xử lý: {period_val}")
 
 final_data = pd.concat(input_dfs, ignore_index=True).rename(columns=col_map)
 final_data = final_data[output_cols]
-final_data = final_data.astype(str, copy=False)
 n_rows, n_cols = final_data.shape
 
 # ==== 6) COM: MỞ EXCEL & APPEND ====
@@ -89,6 +87,7 @@ xlYes = 1
 xlSrcRange = 1
 xlSortOnValues = 0
 xlAscending = 1
+xlCellTypeVisible = 12
 
 try:
     wb = excel.Workbooks.Open(OUTPUT_FILE, ReadOnly=False)
@@ -110,27 +109,23 @@ try:
         lo = ws.ListObjects.Add(SourceType=xlSrcRange, Source=src_rng, XlListObjectHasHeaders=xlYes)
         lo.TableStyle = TABLE_STYLE
 
-    # Xóa dữ liệu cũ theo PERIOD
-    lo.Range.AutoFilter(Field=period_field, Criteria1=str(period_val))
+    # Xóa dữ liệu cũ theo PERIOD (tối ưu: filter và delete visible)
+    lo.Range.AutoFilter(Field=period_field, Criteria1="=" + str(period_val))
     if lo.DataBodyRange is not None:
-        rows_to_delete = [
-            lo.DataBodyRange.Rows(r).Row
-            for r in range(1, lo.DataBodyRange.Rows.Count + 1)
-            if str(lo.DataBodyRange.Cells(r, period_field).Value) == str(period_val)
-        ]
-        for row_idx in reversed(rows_to_delete):
-            ws.Rows(row_idx).Delete()
+        try:
+            visible_data = lo.DataBodyRange.SpecialCells(xlCellTypeVisible)
+            visible_data.Delete()
+        except:
+            pass  # Không có dữ liệu visible để xóa
     ws.AutoFilterMode = False
 
     # Vị trí ghi mới
     write_start_row = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row + 1
-    write_end_row = write_start_row + n_rows - 1
 
-    # Append dữ liệu
-    for col_idx, col_name in enumerate(output_cols, start=1):
-        col_data = final_data[col_name].values
-        rng = ws.Range(ws.Cells(write_start_row, col_idx), ws.Cells(write_end_row, col_idx))
-        rng.Value = [[v] for v in col_data]
+    # Append dữ liệu (tối ưu: set toàn bộ range một lần)
+    if n_rows > 0:
+        rng = ws.Range(ws.Cells(write_start_row, 1), ws.Cells(write_start_row + n_rows - 1, n_cols))
+        rng.Value = final_data.values.tolist()
 
     # Resize Table
     last_row = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
@@ -161,5 +156,3 @@ finally:
     pythoncom.CoUninitialize()
 
 print("✅ Hoàn tất: Append dữ liệu, giữ format, fill công thức, sort, không lock file.")
-
-Yêu cầu của tôi đối với code: tôi có 1 file excel: "C:\Users\458714\Downloads\Weekly Forecast _ Cut-off Data.xlsx" có format và các cột PERIOD	Period-week	Channel	TERRITORY	OFFICE	Segment_Final	Tenure_Final	 Week 	 APE_sub 	 ACTIVE NET_sub 	 CASE_sub 	 F_MONTH 	 F_SEGMENT_PCA 	 F_FINAL_PCA 	 F_APE 	 F_ACTIVE NET 	 F_CASE, tôi muốn sử dụng VSCode để append tự động dữ liệu mới từ một folder khác với các yêu cầu: các dữ liệu mới sẽ được append vào các cột PERIOD	Period-week	Channel	TERRITORY	OFFICE	Segment_Final	Tenure_Final	 Week 	 APE_sub 	 ACTIVE NET_sub 	 CASE_sub, còn ở các row vừa mới được append thì tại các cột F_MONTH 	 F_SEGMENT_PCA 	 F_FINAL_PCA 	 F_APE 	 F_ACTIVE NET 	 F_CASE ta sẽ tự động copy công thức từ các row cũ xuống cho các row mới append. Viêc append dữ liệu sẽ tuân theo logic sau: ta có folder "C:\Users\458714\Prudential Corporation Asia\2025" và trong folder này sẽ có nhiều folder con, ta sẽ lấy folder con mới nhất, và trong các folder con này cũng có các folder con khác và ta cũng sẽ lấy folder con mới nhất, trong folder con sẽ có các file csv ACCUM_W1.csv, ACCUM_W2.csv, ACCUM_W3.csv, ACCUM_W4.csv, MAPA_BY_SEGMENT_NEW_FINAL_ACCUM.csv, xét thời gian hiện tại của tháng, nếu hiện tại là tuần thứ 1 thì ta sẽ xóa các dữ liệu trong file "C:\Users\458714\Downloads\Weekly Forecast _ Cut-off Data.xlsx" có giá trị ở cột PERIOD = value ở cột YearMonth của file MAPA_BY_SEGMENT_NEW_FINAL_ACCUM.csv và append dữ liệu MAPA_BY_SEGMENT_NEW_FINAL_ACCUM.csv vào file này, nếu hiện tại là tuần thứ 2 thì ta append dữ liệu của ACCUM_W1.csv, nếu hiện tại là tuần thứ 3 thì ta sẽ xóa các dữ liệu trong file "C:\Users\458714\Downloads\Weekly Forecast _ Cut-off Data.xlsx" có giá trị ở cột PERIOD = value ở cột YearMonth của file append dữ liệu của ACCUM_W1.csv và append dữ liệu 2 file ACCUM_W1.csv, ACCUM_W2.csv, nếu hiện tại là tuần thứ 4 thì ta sẽ xóa các dữ liệu trong file "C:\Users\458714\Downloads\Weekly Forecast _ Cut-off Data.xlsx" có giá trị ở cột PERIOD = value ở cột YearMonth của file append dữ liệu của ACCUM_W1.csv và append dữ liệu 3 file ACCUM_W1.csv, ACCUM_W2.csv, ACCUM_W3.csv, sau khi dữ liệu được append vào thì sort theo Period-week, sau khi append code không được thay đổi format và các dữ liệu khác ngoài các cột đã cho thì không được thay đổi
