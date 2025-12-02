@@ -1,12 +1,35 @@
-# For our dl model we will create windows of data that will be feeded into the datasets, for each timestemp T we will append the data from T-7 to T to the Xdata with target Y(t)
+```python
+import tensorflow as tf
+import numpy as np
+from datetime import datetime
+import pandas as pd
+from sklearn.metrics import mean_absolute_error, r2_score
+
+# Assuming the following functions are defined as in the XGBoost code
+# def smape(y_true, y_pred): ...
+# def nmae(y_true, y_pred): ...
+# def duan_smearing_factor(y_log_true, y_log_pred): ...
+# def inverse_log1p_with_smearing(y_log_pred, smear_factor=None): ...
+
+# Assuming evaluate function is defined elsewhere, e.g.:
+# def evaluate(y_true, y_pred):
+#     return {
+#         'MAE': mean_absolute_error(y_true, y_pred),
+#         'R2': r2_score(y_true, y_pred),
+#         'sMAPE': smape(y_true, y_pred)
+#     }
+
+# Assuming resultsDict and predictionsDict are defined
+
+# Parameters
 BATCH_SIZE = 64
-BUFFER_SIZE = 100
+BUFFER_SIZE = 1000  # Increased for better shuffling
 WINDOW_LENGTH = 24
 
-
+# Use the same window_data function
 def window_data(X, Y, window=7):
     '''
-    The dataset length will be reduced to guarante all samples have the window, so new length will be len(dataset)-window
+    The dataset length will be reduced to guarantee all samples have the window, so new length will be len(dataset)-window+1
     '''
     x = []
     y = []
@@ -15,176 +38,88 @@ def window_data(X, Y, window=7):
         y.append(Y[i])
     return np.array(x), np.array(y)
 
+# Use log-transformed target to align with XGBoost
+y_train = np.log1p(df_train['APE_Sub'])
+y_test = np.log1p(df_test['APE_Sub'])
 
-# Since we are doing sliding, we need to join the datasets again of train and test
-X_w = np.concatenate((X_train, X_test))
+# X_train and X_test are already defined as DataFrames in XGBoost code, convert to numpy
+X_train_np = X_train.to_numpy()
+X_test_np = X_test.to_numpy()
+
+# Concatenate to apply sliding window across the boundary
+X_w = np.concatenate((X_train_np, X_test_np))
 y_w = np.concatenate((y_train, y_test))
 
+# Apply windowing
 X_w, y_w = window_data(X_w, y_w, window=WINDOW_LENGTH)
+
+# Split back into train and test (adjusted for windowing)
 X_train_w = X_w[:-len(X_test)]
 y_train_w = y_w[:-len(X_test)]
 X_test_w = X_w[-len(X_test):]
 y_test_w = y_w[-len(X_test):]
 
-# Check we will have same test set as in the previous models, make sure we didnt screw up on the windowing
-print(f"Test set equal: {np.array_equal(y_test_w,y_test)}")
+# Check test set consistency (on log scale)
+print(f"Test set equal (log): {np.array_equal(y_test_w, y_test[-len(y_test_w):])}")
 
+# Create TensorFlow datasets
 train_data = tf.data.Dataset.from_tensor_slices((X_train_w, y_train_w))
 train_data = train_data.cache().shuffle(BUFFER_SIZE).batch(BATCH_SIZE).repeat()
 
 val_data = tf.data.Dataset.from_tensor_slices((X_test_w, y_test_w))
 val_data = val_data.batch(BATCH_SIZE).repeat()
 
-dropout = 0.0
-simple_lstm_model = tf.keras.models.Sequential([
-    tf.keras.layers.LSTM(
-        128, input_shape=X_train_w.shape[-2:], dropout=dropout),
-    tf.keras.layers.Dense(128),
-    tf.keras.layers.Dense(128),
+# Improved model architecture: Stacked bidirectional LSTMs, dropout, ReLU activations
+dropout = 0.2
+improved_lstm_model = tf.keras.models.Sequential([
+    tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=True, input_shape=X_train_w.shape[-2:], dropout=dropout)),
+    tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, dropout=dropout)),
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dropout(dropout),
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dropout(dropout),
     tf.keras.layers.Dense(1)
 ])
 
-simple_lstm_model.compile(optimizer='rmsprop', loss='mae')
+# Compile with Adam optimizer and MSE loss (better for log-transformed targets)
+improved_lstm_model.compile(optimizer='adam', loss='mse')
 
-# logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S") #Support for tensorboard tracking!
+# Callbacks for early stopping
+early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True, verbose=1)
+
+# Optional TensorBoard callback
+# logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S")
 # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir)
 
-EVALUATION_INTERVAL = 200
-EPOCHS = 5
+EVALUATION_INTERVAL = len(X_train_w) // BATCH_SIZE if len(X_train_w) // BATCH_SIZE > 0 else 1
+VALIDATION_INTERVAL = len(X_test_w) // BATCH_SIZE if len(X_test_w) // BATCH_SIZE > 0 else 1
+EPOCHS = 50  # Increased max epochs, early stopping will handle
 
-model_history = simple_lstm_model.fit(train_data, epochs=EPOCHS,
-                                      steps_per_epoch=EVALUATION_INTERVAL,
-                                      validation_data=val_data, validation_steps=50)  # ,callbacks=[tensorboard_callback]) #Uncomment this line for tensorboard support
+model_history = improved_lstm_model.fit(train_data, epochs=EPOCHS,
+                                        steps_per_epoch=EVALUATION_INTERVAL,
+                                        validation_data=val_data, validation_steps=VALIDATION_INTERVAL,
+                                        callbacks=[early_stopping])  # Add tensorboard_callback if needed
 
-yhat = simple_lstm_model.predict(X_test_w).reshape(1, -1)[0]
-resultsDict['Tensorflow simple LSTM'] = evaluate(y_test, yhat)
-predictionsDict['Tensorflow simple LSTM'] = yhat
+# Predict on test (log scale)
+yhat_log = improved_lstm_model.predict(X_test_w).reshape(-1)
 
-đây là mô hình LSTM đơn giản, hiện tại mô hình này perform không tốt trên bộ dữ liệu của tôi, hãy cải thiện và tối ưu hóa mô hình tốt nhất có thể, sau đây là code XGBoost trên mô hình của tôi và đang perform tốt, hãy align mô hình deep learning hợp lí : 
-import pandas as pd
-import numpy as np
-from sklearn.metrics import mean_absolute_error, r2_score
-from xgboost import XGBRegressor
+# Compute smearing factor using train predictions (align with XGBoost)
+y_train_pred_log = improved_lstm_model.predict(X_train_w).reshape(-1)
+smear_lstm = duan_smearing_factor(y_train_w, y_train_pred_log)
 
-def smape(y_true, y_pred):
-    denom = (np.abs(y_true) + np.abs(y_pred))
-    denom = np.where(denom == 0, 1e-9, denom)
-    return 100 * np.mean(2.0 * np.abs(y_pred - y_true) / denom)
+# Inverse transform with smearing
+yhat = inverse_log1p_with_smearing(yhat_log, smear_lstm)
 
-def nmae(y_true, y_pred):
-    return mean_absolute_error(y_true, y_pred) / (np.mean(np.abs(y_true)) + 1e-9)
+# True test values (original scale)
+y_test_true = np.expm1(y_test_w)
 
-def duan_smearing_factor(y_log_true, y_log_pred):
-    resid = y_log_true - y_log_pred
-    return float(np.mean(np.exp(resid)))
+# Evaluate and store
+resultsDict['Improved Tensorflow LSTM'] = evaluate(y_test_true, yhat)
+predictionsDict['Improved Tensorflow LSTM'] = yhat
 
-def inverse_log1p_with_smearing(y_log_pred, smear_factor=None):
-    if smear_factor is None:
-        return np.expm1(y_log_pred)
-    else:
-        return np.exp(y_log_pred) * smear_factor - 1.0
-
-assert 'TransDate_dt' in df.columns and 'APE_Sub' in df.columns, "Thiếu cột 'TransDate_dt' hoặc 'APE_Sub' trong df"
-df['TransDate_dt'] = pd.to_datetime(df['TransDate_dt'], format='%Y-%m-%d')
-
-group_cols = ['OfficeID'] if 'OfficeID' in df.columns else []
-
-agg_cols = {'APE_Sub': 'sum'}
-df_agg = df.groupby(group_cols + ['TransDate_dt'], as_index=False).agg(agg_cols)
-
-def make_daily_features(g, target_col='APE_Sub'):
-    g = g.set_index('TransDate_dt').sort_index()
-    g = g.resample('D').sum()
-    lag_days = [7, 30, 90]
-    for lag in lag_days:
-        g[f'lag_{lag}d'] = g[target_col].shift(lag)
-    rolling_windows = [7, 30]
-    for w in rolling_windows:
-        g[f'rolling_mean_{w}d'] = g[target_col].shift(1).rolling(w).mean()
-        g[f'rolling_sum_{w}d']  = g[target_col].shift(1).rolling(w).sum()
-    g['diff_7d'] = g[target_col].shift(1).diff(7)
-    g['diff_30d'] = g[target_col].shift(1).diff(30)
-    g = g.reset_index()
-    g['day_of_week'] = g['TransDate_dt'].dt.dayofweek
-    g['is_weekend']  = g['day_of_week'].isin([5, 6]).astype(int)
-    g['month']       = g['TransDate_dt'].dt.month
-    g['quarter']     = g['TransDate_dt'].dt.quarter
-    return g
-
-if group_cols:
-    df_daily = (
-        df_agg
-        .groupby(group_cols, group_keys=True)
-        .apply(lambda g: make_daily_features(g, target_col='APE_Sub'))
-        .reset_index(level=group_cols)
-    )
-else:
-    df_daily = make_daily_features(df_agg, target_col='APE_Sub')
-
-df_model = df_daily.copy()
-df_model = df_model[df_model['APE_Sub'] > 0].copy()
-
-q1 = df_model['APE_Sub'].quantile(0.01)
-q3 = df_model['APE_Sub'].quantile(0.99)
-lower = q1
-upper = q3
-df_model = df_model[(df_model['APE_Sub'] >= lower) & (df_model['APE_Sub'] <= upper)].copy()
-
-sort_cols = (group_cols + ['TransDate_dt']) if 'TransDate_dt' in df_model.columns else list(df_model.columns)
-df_model_sorted = df_model.sort_values(sort_cols).copy()
-
-# Chia dữ liệu 80/20 theo thứ tự thời gian (train/test)
-n = len(df_model_sorted)
-train_end = int(n * 0.80)
-df_train = df_model_sorted.iloc[:train_end].copy()
-df_test  = df_model_sorted.iloc[train_end:].copy()
-
-lag_cols = ['lag_7d', 'lag_30d', 'lag_90d']
-rolling_cols = ['rolling_mean_7d', 'rolling_sum_7d', 'rolling_mean_30d', 'rolling_sum_30d']
-dropna_cols = lag_cols + rolling_cols
-
-df_train = df_train.dropna(subset=dropna_cols).copy()
-df_test  = df_test.dropna(subset=dropna_cols).copy()
-
-y_train = np.log1p(df_train['APE_Sub'])
-y_test  = np.log1p(df_test['APE_Sub'])
-
-drop_cols = ['APE_Sub', 'TransDate_dt']
-X_train = df_train.drop(columns=[c for c in drop_cols if c in df_train.columns]).copy()
-X_test  = df_test.drop(columns=[c for c in drop_cols if c in df_test.columns]).copy()
-
-X_train.columns = X_train.columns.str.replace(r'\s+', '_', regex=True)
-X_test.columns  = X_test.columns.str.replace(r'\s+', '_', regex=True)
-
-reg = XGBRegressor(
-    objective='reg:squarederror',
-    n_estimators=100,
-    learning_rate=0.1,
-    max_depth=3,
-    subsample=0.7,
-    colsample_bytree=1.0,
-    reg_lambda=1.0,
-    reg_alpha=0.5,
-    min_child_weight=1,
-    gamma=0,
-    tree_method='hist',
-    grow_policy='lossguide',
-    max_bin=256,
-    n_jobs=-1,
-    random_state=42
-)
-
-reg.fit(X_train, y_train)
-
-y_test_pred_log = reg.predict(X_test)
-y_train_pred_log = reg.predict(X_train)
-smear_xgb = duan_smearing_factor(y_train, y_train_pred_log)
-
-y_test_pred = inverse_log1p_with_smearing(y_test_pred_log, smear_xgb)
-y_test_true = np.expm1(y_test)
-
-mae_xgb_test  = mean_absolute_error(y_test_true, y_test_pred)
-r2_xgb_test   = r2_score(y_test_true, y_test_pred)
-smape_xgb_test  = smape(y_test_true, y_test_pred)
-
-print(f"[TEST] XGB  MAE: {mae_xgb_test:,.2f} | R²: {r2_xgb_test:.4f} | sMAPE: {smape_xgb_test:.2f}%")
+# Print metrics to align with XGBoost output
+mae_lstm_test = mean_absolute_error(y_test_true, yhat)
+r2_lstm_test = r2_score(y_test_true, yhat)
+smape_lstm_test = smape(y_test_true, yhat)
+print(f"[TEST] Improved LSTM  MAE: {mae_lstm_test:,.2f} | R²: {r2_lstm_test:.4f} | sMAPE: {smape_lstm_test:.2f}%")
+```
