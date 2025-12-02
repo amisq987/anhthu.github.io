@@ -1,380 +1,190 @@
-QUYỀN LỢI BẢO VỆ 	PRUDENTIAL UL25 PRU - BẢO VỆ TỐI ĐA	MANULIFE UL25 XANH ƯỚC MƠ	CHUBB LIFE UL23 KẾ HOẠCH TÀI CHÍNH	FWD UL25 BẢO VỆ GIA TĂNG	BẢO VIỆT NHÂN THỌ UL25 AN KHANG NHƯ Ý/AN TÂM HOẠCH ĐỊNH	GENERALI UL2025 VITA NGÀY MAI VỮNG CHẮC	SUNLIFE UL25 SUN - VÌ NHÀ MÌNH	AIA UL25 KHỎE TRỌN VẸN	DAIICHI LIFE UL25 AN TÂM SONG HÀNH THỊNH VƯỢNG
-Thông tin cơ bản									
-Tuổi tham gia	30 ngày - 70 tuổi	30 ngày - 69 tuổi	30 ngày - 65 tuổi	30 ngày - 70 tuổi	 0 - 65 tuổi	30 ngày tuổi - 55 tuổi	30 ngày tuổi - 65 tuổi	30 ngày tuổi - 70 tuổi	30 ngày tuổi - 70 tuổi
-Thời Hạn Hợp Đồng	đến tuổi 100	đến tuổi 99	đến tuổi 95	80 tuổi	đến tuổi 90 	đến tuổi 99	đến 100 tuổi	đến 100 tuổi	đến 100 tuổi
-Cam kết không mất hiệu lực	4 năm	3 năm	3 năm	3 năm	4 năm	4 năm	4 năm	4 năm	4 năm
-Đáo hạn	100% giá trị  tài khoản	100% giá trị  tài khoản	100% giá trị  tài khoản	100% giá trị  tài khoản	100% giá trị  tài khoản	100% giá trị  tài khoản	100% giá trị  tài khoản	100% giá trị  tài khoản	100% giá trị  tài khoản
-Tổng quan quyền lợi									
-Tử vong	"cơ bản: max(SA,TPA) + EPA
-nâng cao: SA + TPA +EPA"	"cơ bản: max(SA,TPA) + EPA
-nâng cao: SA + TPA +EPA"	"A: max(SA,TPA) + EPA
-B: SA + TPA +EPA
-sau 70 tuổi: chỉ lựa chọn A"	"A: max(SA,TPA) + EPA
-B: SA + TPA +EPA"	"Cơ bản: MAX(SA,TPA) +EPA
-Vượt trội: TPA + EPA + SA"	"MAX(SA,TPA) +EPA
-Do tai nạn: 100-300% SA"	"Ưu tiên tích lũy: MAX(SA,TPA) + EPA
-Ưu tiên Bảo vệ: SA + EPA
-Sau 75 tuổi, chỉ chọn Ưu tiên Tích lũy"	MAX(SA,TPA) + EPA	"Cơ bản: MAX(SA,TPA) + EPA
-Nâng cao: SA + TPA + EPA
-Sau 70t chỉ chọn cơ bản"
-TTTBVVV	"cơ bản: max(SA,TPA) + EPA
-nâng cao: SA + TPA +EPA
-max 80 tuổi"	"cơ bản: max(SA,TPA) + EPA
-nâng cao: SA + TPA +EPA
-max 75 tuổi"	"A: max(SA,TPA) + EPA
-B: SA + TPA +EPA
-sau 70 tuổi: chỉ lựa chọn A"	"A: max(SA,TPA) + EPA
-B: SA + TPA +EPA
-Tại thời điểm được chứng nhận TTTBVV, NĐBH 18-65t: nhận 100%SA
+# For our dl model we will create windows of data that will be feeded into the datasets, for each timestemp T we will append the data from T-7 to T to the Xdata with target Y(t)
+BATCH_SIZE = 64
+BUFFER_SIZE = 100
+WINDOW_LENGTH = 24
 
 
-"	"Cơ bản: MAX(SA,TPA) +EPA
-Vượt trội: TPA + EPA + SA
-Max 70 tuổi"	do tai nạn: 2-100%SA	"Ưu tiên tích lũy: MAX(SA,TPA) + EPA
-Ưu tiên Bảo vệ: SA + EPA"	"MAX(SA,TPA) + EPA
-"	"Cơ bản: MAX(SA,TPA) + EPA
-Nâng cao: SA + TPA + EPA
-Sau 70t chỉ chọn cơ bản"
-Bệnh hiểm nghèo	N/A	N/A	N/A	N/A	N/A		Min(25%SA,1 tỷ VND), nhận 1 lần		"Thể nhẹ: 50% STBH nhưng không vượt quá giới hạn chi trả
-Ngiêm trọng: 100% STBH, khấu trừ quyền lợi thể nhẹ nếu đã được chi trả trước đó"
-Tai nạn	N/A	N/A	N/A	N/A	N/A	"Gãy xương: 1-3%SA
-Chấn tương nội tạng: 5-15%SA
-Vận chuyển cấp cứu: 2,5tr/ tai nạn
-Bỏng: 50-100%SA"	N/A	N/A	"TV do tai nạn: 20%SA, max 1 tỷ
-TV do tai nạn đặc biệt: 50%SA, max 2,5 tỷ "
-Khác	N/A	Chu toàn hậu sự: 10%SA, max 30tr	N/A	N/A	N/A	Thưởng sự kiện đặc biệt: 20% IP max 25tr	N/A	N/A	Chu toàn hậu sự: 10%quyền lợi bảo vệ tử vong, max 30tr
-Quyền mua bảo hiểm bổ sung 	"Chủ hợp đồng có thể yêu cầu tăng SA mà không cần thẩm định trong các trường hợp đặc biệt:
-- Người được bảo hiểm trước 70t
-- Tối đa 2 lần
-- Min (50%SA, 500tr VND)"	"Chủ hợp đồng có thể yêu cầu tăng SA mà không cần thẩm định trong các trường hợp đặc biệt:
-- Người được bảo hiểm trước 65t
-- Tối đa 3 lần
-- Min (50%SA, 1 tỷ VND)"	N/A	"Chủ hợp đồng có thể yêu cầu tăng SA mà không cần thẩm định trong các trường hợp đặc biệt:
-- Người được bảo hiểm trước 70t
-"	"Chủ hợp đồng có thể yêu cầu tăng SA mà không cần thẩm định trong các trường hợp đặc biệt:
-- Người được bảo hiểm trước 70
--Tổng phí đóng thêm không quá 5 lần phí bảo hiểm cơ bản của kỳ đóng phí đó
-
-"	N/A	"Chủ hợp đồng có thể yêu cầu tăng SA mà không cần thẩm định trong các trường hợp đặc biệt:
-- min(50%SA,500tr)
-- tối đa 3 lần
-- max 65t"	"Chủ hợp đồng có thể yêu cầu tăng SA mà không cần thẩm định trong các trường hợp đặc biệt:
--Tổng phí đóng thêm không quá 5 lần phí bảo hiểm cơ bản của kỳ đóng phí đó"	"Chủ hợp đồng có thể yêu cầu tăng SA mà không cần thẩm định trong các trường hợp đặc biệt:
-- Tối đa 1 lần
-- tối đa 50%SA, không quá 500tr"
-Chi tiết quyền lợi									
-Lãi suất cam kết tối thiểu	"• PY1: 3.5% 
-• PY2-3: 3% 
-• PY4-7: 2.5% 
-• PY8-15: 2.0% 
-• PY16+: 1%"	"• PY1: 3.5% 
-• PY2: 3% 
-• PY3-4: 2.5% 
-• PY5-6: 2.0% 
-• PV7-8: 1.5%
-• PV9-10: 1.0%
-• PY11+: 0.5%"	"• PY1-2: 6% 
-• PY3: 3% 
-• PY4-5: 2% 
-• PY6-10: 1.5% 
-• PV11-15: 1%
-• PV16+: 0.5%
-"	"• PY1: 3.5% 
-• PY2-5: 2.5% 
-• PY6-10: 2% 
-• PY11-15: 1.5% 
-• PV16+: 0.5%
-"	"• PY1: 2.5% 
-• PY2: 2% 
-• PY3: 1.5% 
-• PY4-10: 1% 
-• PY11-15: 0.5% 
-• PV16+: 0.25
-"	"• PY1: 3.5% 
-• PY2-5: 3% 
-• PY6-10: 2% 
-• PY11-13: 1.5% 
-• PY14-16: 1% 
-• PY17+: 0.5%
-"	"• PY1: 3.5% 
-• PY2-3: 3% 
-• PY4-5: 2.5% 
-• PY6-10: 2% 
-• PY11-15: 1.5% 
-• PY16-20: 1%
-• PY21+: 0.5%
-"	"• PY1: 3.5% 
-• PY2-3: 3% 
-• PY4-5: 2% 
-• PY6-10: 1.5% 
-• PY11-15: 1% 
-• PY16+:0.5%"	"• PY1: 3% 
-• PY2-10: 2% 
-• PY11-15: 1% 
-• PY16-25: 0.5% 
-• PY26+: 0.25% "
-Các khoản phí									
-Tỷ lệ phân bổ phí bảo hiểm (TPA)	"Y1:50% 
-Y2:30% 
-Y3-Y5:20%/năm 
-Y6-Y10: 2%/năm 
-Y11+: 0%"	"Y1:50% 
-Y2:30% 
-Y3-Y5:20%/năm 
-Y6-Y10: 2%/năm 
-Y11+: 0%"	"Y1:50% 
-Y2:30% 
-Y3-Y5:20%/năm 
-Y6-Y10: 1.5%/năm 
-Y11+: 0%"	"Y1:50% 
-Y2:30% 
-Y3-Y5:20%/năm 
-Y6-Y10: 2%/năm 
-Y11+: 0%"	"Y1:50% 
-Y2:30% 
-Y3-Y5:20%/năm 
-Y6-Y10: 2%/năm 
-Y11+: 0%"	"Y1:50% 
-Y2:30% 
-Y3-Y5:20%/năm 
-Y6-Y10: 2%/năm 
-Y11+: 0%"	"Y1:50% 
-Y2:30% 
-Y3-Y5:20%/năm 
-Y6-Y10: 2%/năm 
-Y11+: 0%"	"TRỌN ĐỜI: Y1/Y2/Y3-5/Y6-10/Y11+:
-50%/30%/20%/2%/0%
-TOÀN DIỆN: Y1/Y2/Y3-5/Y6-10/Y11+:
-50%/30%/20%/2%/0%
-BỀN VỮNG: Y1/Y2/Y3-5/Y6-10/Y11+:
-30%/18%/12%/1.2%/0%"	"Y1:50% 
-Y2:30% 
-Y3-Y5:20%/năm 
-Y6-Y10: 2%/năm 
-Y11+: 0%"
-Phí phân bổ ban đầu	1.50%	2%	N/A	N/A	N/A	N/A	N/A	N/A	N/A
-Phí quản lí hợp đồng	Bắt đầu từ 42.000 đồng/tháng năm 2025. Từ 2026 trở đi, tăng thêm 2.000 đồng/tháng mỗi năm nhưng không > 70.000 đồng/tháng.	Bắt đầu từ 42.000 đồng/tháng năm 2025. Từ 2026 trở đi, tăng thêm 2.000 đồng/tháng mỗi năm nhưng không > 70.000 đồng/tháng.	Bắt đầu từ 44.000 đồng/tháng năm 2025. Từ 2026 trở đi, tăng thêm 2.000 đồng/tháng mỗi năm nhưng không > 70.000 đồng/tháng.	Bắt đầu từ 40.000 đồng/tháng năm 2025. Từ 2026 trở đi, tăng thêm 5.000 đồng/tháng mỗi năm nhưng không > 60.000 đồng/tháng.	Bắt đầu từ 28.000 đồng/tháng năm 2025. Từ 2026 trở đi, tăng thêm 1.000 đồng/tháng mỗi năm nhưng không > 70.000 đồng/tháng.	Bắt đầu từ 45.000 đồng/tháng năm 2025. Từ 2026 trở đi, tăng thêm 2.000 đồng/tháng mỗi năm nhưng không > 60.000 đồng/tháng.	Bắt đầu từ 44.000 đồng/tháng năm 2025. Từ 2026 trở đi, tăng thêm 2.000 đồng/tháng mỗi năm nhưng không > 60.000 đồng/tháng.	"2025-2029:40K
-2030-2034: 50K
-2035+: 60K"	Bắt đầu từ 45.000 đồng/tháng năm 2025. Từ 2026 trở đi, tăng thêm 2.000 đồng/tháng mỗi năm nhưng không > 70.000 đồng/tháng.
-Phí quản lí quỹ	Max 2%/ năm	Max 2%/ năm	Max 2%/ năm	Max 2%/ năm	Max 2%/ năm	Max 2%/ năm	Max 2%/ năm	Max 2%/ năm	Max 2%/ năm
-Phí bảo hiểm rủi ro	"Y1/Y2/Y3/Y4/Y5/Y6+: 
-100%/100%/24%/12%/6%/0% (%TPA)"	"Y1/Y2/Y3/Y4/Y5/Y6/Y7+: 
-90%/90%/45%/30%/20%/10%/0% (%TPA)"	"Y1/Y2/Y3/Y4/Y5/Y6+: 
-100%/100%/40%/30%/20/0% (%TPA)"	"Y1/Y2/Y3/Y4/Y5/Y6+: 
-100%/100%/30%/20%/10/0% (%TPA)"	"Y1/Y2/Y3/Y4/Y5/Y6+: 
-100%/100%/45%/40%/20/0% (%TPA)"	"Y1-2/Y3/Y4/Y5/Y6+: 
-100%/30%/20%/10%/0% (%TPA)"	"Y1-2/Y3/Y4/Y5/Y6+: 
-100%/45%/30%/20%/0% (%TPA)"	"TRỌN ĐỜI: Y1/Y2/Y3/Y4/Y5/Y6+:
-100%/100%/45%/30%/20%/0%
-TOÀN DIỆN: Y1/Y2/Y3/Y4/Y5/Y6+:
-100%/100%/45%/30%/20%/0%
-BỀN VỮNG: Y1/Y2/Y3/Y4/Y5/Y6+:
-100%/100%/40%/25%/10%/0%"	"Y1-2/Y3/Y4/Y5/Y6+: 
-100%/45%/30%/20%/0% (%TPA)"
-Phí rút tiền một phần	Không chịu phí	Không chịu phí	Không chịu phí	Không chịu phí	Không chịu phí	Không chịu phí	Không chịu phí	Không chịu phí	Không chịu phí
-Thưởng/Quyền lợi bổ sung									
-Loyalty bonus	"• Năm hợp đồng thứ 10 (PY10): nhận 150% phí bảo hiểm ban đầu
-• Năm hợp đồng thứ 15 (PY15) và mỗi 5 năm sau đó: nhận 75% phí bảo hiểm ban đầu"	Từ năm hợp đồng thứ 3 (PY3) và mỗi 3 năm sau đó: Nhận 3% của mức trung bình phí TPA trong 36 tháng liền trước đó	N/A	"Khoản thưởng = Tỷ lệ thưởng (%) * Tổng phí bảo hiểm rủi ro đã được khấu trừ
-• Y10/Y15/Y20:
-50%/75%/100%"	N/A	N/A	"Đóng phí đúng hạn:
-Y8/Y15: 25% GTTK cơ bản trung bình"		Y11: 2%*phí bảo hiểm cơ bản của năm xét thưởng
-Retention bonus	Từ PY20 và mỗi 5 năm sau đó: nhận 4% của mức trung bình phí TPA & EPA trong 60 tháng trước đó	"• SA < 1 tỷ: 50% FYP vào năm T10, 300% FYP vào năm T20
-• 1 tỷ <SA < 1,5 tỷ: 100% FYP vào năm T10, 350% FYP vào năm T20
-•SA > 1,5 tỷ: 150% FYP vào năm T10, 400% FYP vào năm T20"	"Y7/Y8/Y9/Y10/Y20:
-10%/20%40%/60%/10%"		Y5/Y10/Y15/Y20: 1%SA	"Khoản thưởng = Tỷ lệ thưởng * IP
-Y15/Y20/Y25/Y30:
-50%/50%/100%/100$"	"Y10/Y15/Y20:
-3% GTTK cơ bản trung bình"	"Thưởng duy trì = tỷ lệ thưởng(%)*Trung bình phí bảo hiểm cơ bản thực đóng hàng năm
-Y10/Y20/Y30:
-50%/100%/200%"	"Y10: 10%*(TPA + EPA trung bình 120 tháng liền kề trước đó)
-Y20 và mỗi 10 năm sau: 15%*(TPA + EPA trung bình 120 tháng liền kề trước đó)
-"
-MINH HỌA	"THÔNG TIN CƠ BẢN
-STBH: 1 tỷ
-Phí bảo hiểm cơ bản: 18tr340/năm
-Thời hạn bảo hiểm: Tới tuổi 90 
-STBH Tử vong: MAX(1 tỷ đồng, max(SA,TPA) + EPA)
-STBH TTTBVV: MAX(1 tỷ đồng, max(SA,TPA) + EPA)
-Định kỳ đóng phí: Năm, Qúy, Tháng
-Lựa chọn quyền lợi bảo hiểm: Quyền lợi cơ bản
+def window_data(X, Y, window=7):
+    '''
+    The dataset length will be reduced to guarante all samples have the window, so new length will be len(dataset)-window
+    '''
+    x = []
+    y = []
+    for i in range(window-1, len(X)):
+        x.append(X[i-window+1:i+1])
+        y.append(Y[i])
+    return np.array(x), np.array(y)
 
 
-QUYỀN LỢI GIA TĂNG STBH
-Mỗi năm từ Y2-Y11, STBH tự động tăng 5% STBH tại ngày HĐ bắt đầu hiệu lực
-Có thành viên mới: +5%, tối đa 25%
-Y10: chi trả quyền lợi với mức lãi suất gia tăng quy năm là 1% + thưởng duy trì 50% phí BH cơ bản của năm HĐ đầu tiên "	"THÔNG TIN CƠ BẢN
-STBH: 1 tỷ
-Phí bảo hiểm cơ bản: 20tr/năm
-Thời hạn bảo hiểm: Tới tuổi 90 
-STBH Tử vong: 1 tỷ đồng
-STBH TTTBVV: 300tr đồng
-Định kỳ đóng phí: Năm, Qúy, Tháng
-Lựa chọn quyền lợi bảo hiểm: Quyền lợi cơ bản
+# Since we are doing sliding, we need to join the datasets again of train and test
+X_w = np.concatenate((X_train, X_test))
+y_w = np.concatenate((y_train, y_test))
 
+X_w, y_w = window_data(X_w, y_w, window=WINDOW_LENGTH)
+X_train_w = X_w[:-len(X_test)]
+y_train_w = y_w[:-len(X_test)]
+X_test_w = X_w[-len(X_test):]
+y_test_w = y_w[-len(X_test):]
 
-QUYỀN LỢI GIA TĂNG STBH
-Mỗi năm từ Y2-Y11, STBH tự động tăng 5% STBH tại ngày HĐ bắt đầu hiệu lực
-Có thành viên mới: +5%, tối đa 25%
-Y10: chi trả quyền lợi với mức lãi suất gia tăng quy năm là 1% + thưởng duy trì 50% phí BH cơ bản của năm HĐ đầu tiên 
+# Check we will have same test set as in the previous models, make sure we didnt screw up on the windowing
+print(f"Test set equal: {np.array_equal(y_test_w,y_test)}")
 
-QUYỀN LỢI BẢO HIỂM RỦI RO
-Tử vong: MAX(SA,TPA)+EPA + chu toàn hậu sự 30tr -> chấm dứt
-TTTBVV:  MAX(SA,TPA)+EPA, 110tr nếu TTTBVV do ung thư tuyến giáp không thuộc GĐ IV và không di căn xa -> Hợp đồng tiếp tục hiệu lực.
-Quyền lợi bảo hiểm TTTBVV chấm dứt khi NĐBH đạt 75t
-"		"THÔNG TIN CƠ BẢN
-STBH: 850tr
-Phí bảo hiểm cơ bản: 9tr150/năm
-Phí bảo hiểm sp bán kèm: 1tr558/năm
-Thời hạn bảo hiểm: Tới tuổi 90 
-Định kỳ đóng phí: Năm, Qúy, Tháng
-Lựa chọn quyền lợi bảo hiểm: Quyền lợi cơ bản
-Driver: BH chăm sóc sức khỏe: 
-BH điều trị tai nạn: thời hạn: 40 năm; stbh: 200tr; Phí BH: 808k/năm
-BH trợ cấp nằm viện: 35 năm; 300k mỗi Ngày nằm viện; 750k/năm
+train_data = tf.data.Dataset.from_tensor_slices((X_train_w, y_train_w))
+train_data = train_data.cache().shuffle(BUFFER_SIZE).batch(BATCH_SIZE).repeat()
 
-QUYỀN LỢI ĐẦU TƯ
-Y10: 10%*(TPA + EPA trung bình 120 tháng liền kề trước đó)
-Y20 và mỗi 10 năm sau: 15%*(TPA + EPA trung bình 120 tháng liền kề trước đó)
-Y11: 2%*phí bảo hiểm cơ bản của năm xét thưởng
+val_data = tf.data.Dataset.from_tensor_slices((X_test_w, y_test_w))
+val_data = val_data.batch(BATCH_SIZE).repeat()
 
-QUYỀN LỢI BẢO HIỂM RỦI RO
-TTTBVV: max(850tr, GTTK)+EPA
-Hỗ trợ thu nhâp TTTBVV: 18-60: 850tr, còn lại 425tr
-Ung thư giai đoạn sau: 91tr500
-Tử vong: max(850tr,tài khoản bảo hiểm) + EPA
-"	"THÔNG TIN CƠ BẢN
-STBH: 1 tỷ
-Phí bảo hiểm cơ bản: 30tr/năm
-Phí bảo hiểm đóng thêm: 20tr/năm
-Thời hạn bảo hiểm: Tới tuổi 90 
-STBH Tử vong: 1 tỷ đồng
-STBH TTTBVV: 300tr đồng
-Định kỳ đóng phí: Năm, Qúy, Tháng
-Lựa chọn quyền lợi bảo hiểm: Quyền lợi cơ bản
-Driver: Bảo hiểm Bệnh nan y; STBH: 1 tỷ đồng; Phí bảo hiểm: 1,407tr/ năm
+dropout = 0.0
+simple_lstm_model = tf.keras.models.Sequential([
+    tf.keras.layers.LSTM(
+        128, input_shape=X_train_w.shape[-2:], dropout=dropout),
+    tf.keras.layers.Dense(128),
+    tf.keras.layers.Dense(128),
+    tf.keras.layers.Dense(1)
+])
 
-QUYỀN LỢI ĐẦU TƯ
-Phí đóng: 50tr x 20 năm
-Y5: Thưởng duy trì hợp đồng lũy tích: 1.2tr
-Y10: Thưởng duy trì hợp đồng lũy tích: 5.8tr. Giá trị: 650tr
-Y15: Thưởng duy trì hợp đồng lũy tích: 15.4tr. Giá trị: 1,107 tỷ
-Y20: Thưởng duy trì hợp đồng lũy tích: 32.5tr. Giá trị: 1,569 tỷ
-....
-90 tuổi: Hợp đồng đáo hạn -> nhận lại toàn bộ giá trị hợp đồng
+simple_lstm_model.compile(optimizer='rmsprop', loss='mae')
 
-QUYỀN LỢI BẢO HIỂM RỦI RO
-Y3: Ung thư giai đoạn đầu -> Nhận quyền lợi: Bảo hiểm Bệnh nan y: 250tr
-Y6: Tử vong -> chấm dứt bảo hiểm -> Nhân quyền lợi: 1,143 tỷ đồng
-hoặc TTTBVV -> chấm dứt bảo hiểm -> Nhận quyền lợi: 443 triệu đồng
-"				"THÔNG TIN CƠ BẢN
-STBH : 1 tỷ đồng
-Phí bảo hiểm cơ bản: 16tr190/năm
-Phí bảo hiểm sp bán kèm: 5tr120/năm
-Phí bảo hiểm đóng thêm: 8tr690/năm
-Thời hạn bảo hiểm: Tới tuổi 90 
+# logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S") #Support for tensorboard tracking!
+# tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir)
 
-Định kỳ đóng phí: Năm
-Lựa chọn quyền lợi bảo hiểm: Quyền lợi cơ bản
-Driver: BH chăm sóc sức khỏe: gia hạn hằng năm; 2tr7/năm
-BH điều trị sau tai nạn: thời hạn: 45 năm; stbh: 200tr; Phí BH: 672k/năm
-BH điều trị bệnh hiểm nghèo: 40 năm; 200tr; 1tr748/năm
+EVALUATION_INTERVAL = 200
+EPOCHS = 5
 
-QUYỀN LỢI ĐẦU TƯ
-Y10: 10%*(TPA + EPA trung bình 120 tháng liền kề trước đó)
-Y20 và mỗi 10 năm sau: 15%*(TPA + EPA trung bình 120 tháng liền kề trước đó)
-Y11: 2%*phí bảo hiểm cơ bản của năm xét thưởng
+model_history = simple_lstm_model.fit(train_data, epochs=EPOCHS,
+                                      steps_per_epoch=EVALUATION_INTERVAL,
+                                      validation_data=val_data, validation_steps=50)  # ,callbacks=[tensorboard_callback]) #Uncomment this line for tensorboard support
 
-QUYỀN LỢI BẢO HIỂM RỦI RO
-Tử vong hoặc TTTBVV trước tuổi 71: max(1 tỷ, GTTK)
-Tử vong do tai nạn: 20%STBH, tối đa 1 tỷ
-Tử vong do tai nạn đặc biệt: 50%STBH, tối đa 2,5 tỷ
-Hậu sự: Ứng trước 10%QLBH tối đa 30tr
-"
-CITATIONS		MANULIFE	CHUBB LIFE	FWD	Y10: Thưởng duy trì hợp đồng lũy tích: 5.8tr	GENERALI	SUNLIFE	AIA	DAIICHILIFE
-LINK MINH HOẠT SẢN PHẨM		Tailieugioithieusanpham_XanhUocMo.pdf	bbq-epul-299a-v2.pdf	Bang_minh_hoa_QLBH_FWD_Vung_Chac_Tuong_Lai.pdf	Bảo hiểm liên kết chung An Tâm Hoạch Định - Bảo Việt Nhân Thọ - Công ty bảo hiểm nhân thọ hàng đầu Việt Nam	BROCHURE VITA-AN VUI NHƯ Ý 2.0 (0809)	brochure-sun-vi-nha-minh.pdf	AIA - Khỏe Trọn Vẹn - Brochure 3005	Dai-ichi life system
-Ghi chú/Chú thích: Tất cả sản phẩm trên tuân thủ Quy định mới về BHNT (từ 1/7/2023) chỉ bảo vệ tử vong và thương tật toàn bộ vĩnh viễn; các quyền lợi khác (bệnh hiểm nghèo, viện phí, phẫu thuật…) cần mua thêm. Các điều kiện cụ thể (như hạn mức, loại bỏ trừ, và tỉ lệ hoàn trả) phải tham khảo Quy tắc & Điều khoản sản phẩm của từng công ty.
-Điểm nổi bật của từng sản phẩm
-Prudential – Pru-Bảo vệ tối đa: Sản phẩm này có mức bảo vệ tối đa lên đến 80 lần phí cơ bản, cao nhất hiện nay
-vnexpress.net
-. Khách hàng có thể chọn giữa hai kế hoạch bảo hiểm (Cơ bản hoặc Nâng cao) và dễ dàng chuyển đổi giữa chúng mà không tăng phí đóng
-vnexpress.net
-. Sản phẩm có lãi suất đầu tư cam kết dài hạn và nhiều khoản thưởng duy trì hợp đồng (thưởng tri ân 150% phí năm 1 vào năm hợp đồng thứ 10, thưởng duy trì HĐ 4% AV từ năm 20)
-prudential.com.vn
-vnexpress.net
-. Đặc biệt, người mua có thể tăng số tiền bảo hiểm mà không cần giám định sức khỏe khi xảy ra các sự kiện quan trọng (kết hôn, sinh con, chuyển cấp học của con)
-vnexpress.net
-. Những ưu điểm này giúp Pru-Bảo vệ tối đa linh hoạt, bảo vệ cao và tính toán phù hợp với khách hàng có nhu cầu kết hợp bảo vệ – tích lũy.
-Manulife – Xanh Ước Mơ: Sản phẩm nhắm đến hai thế hệ trong gia đình: bảo vệ cha mẹ suốt đời và tích lũy cho con cái. Điểm nổi bật là Tăng số tiền bảo hiểm tự động mỗi năm (5% mỗi năm từ HĐ thứ 2–11, tối đa +50%) và tăng 5% khi có thành viên gia đình mới
-manulife.com.vn
-. Khách hàng hưởng lãi suất đầu tư cam kết (3,5% → 0,5% sau 10 năm) và nhận thưởng duy trì hợp đồng tại năm hợp đồng thứ 10 (tuần hoàn 150% phí năm đầu)
-manulife.com.vn
-. Manulife không tăng phí bảo hiểm với hai quyền lợi tăng SBH này, giúp gia đình liên tục được gia tăng bảo vệ. Những tính năng trên và khả năng linh hoạt chuyển đổi kế hoạch bảo hiểm theo nhu cầu cuộc sống làm sản phẩm này nổi bật trong nhóm UL.
-Chubb Life – Kế hoạch Tài chính Chủ động: Sản phẩm UL gồm ba gói quyền lợi (Quyền lợi 65, 80, 99) để phù hợp các mức độ bảo vệ khác nhau
-chubb.mediaroom.com
-. Ưu điểm chính là đầu tư linh hoạt: khách hàng tự chọn phân bổ tỷ lệ vào ba quỹ (Bền vững, Cân bằng, Tăng trưởng) do công ty quỹ uy tín quản lý, và có thể thay đổi tỷ lệ đầu tư bất kỳ lúc nào
-chubb.mediaroom.com
-. Chubb Life còn cho nộp thêm phí tự do, mang lại tiềm năng sinh lời cao. Khách hàng cũng được hưởng các quyền lợi thưởng Duy trì Hợp đồng và Tuổi vàng hấp dẫn
-chubb.mediaroom.com
-. Điểm khác biệt: đây là UL dành cho người ưa thích đầu tư chuyên nghiệp, với sự hỗ trợ của Chubb Life FMC và chiến lược quỹ đa dạng.
-FWD – Bảo vệ gia tăng: Sản phẩm UL thế hệ mới nổi bật ở quyền lợi thương tật toàn bộ vĩnh viễn (TTTBVV) cực đại – lên đến 400% số tiền bảo hiểm (bao gồm khoản tăng tự động) cho người bị TTTBVV
-vietcombank.com.vn
-. Sản phẩm cam kết lãi suất đầu tư hấp dẫn và có khoản thưởng bảo vệ định kỳ lên tới 100% phí bảo hiểm rủi ro
-vietcombank.com.vn
-. Ngoài ra, FWD rất linh hoạt: đóng phí cố định 3 năm đầu và từ năm thứ 4 có thể đóng thêm, rút tiền bất kỳ lúc nào mà không phí phạt
-vietcombank.com.vn
-. Những điểm này giúp FWD – Bảo vệ gia tăng vừa bảo vệ vượt trội (đặc biệt cho TTTBVV), vừa linh hoạt về tài chính, phù hợp với nhu cầu thích tích lũy và dễ dàng điều chỉnh.
-Bảo Việt – An Khang Như Ý: Sản phẩm này tập trung vào việc bảo vệ tối đa. Điểm nổi bật là hạn mức bảo vệ rất lớn: lên đến 300 lần phí cơ bản (tương đương tối đa 25 tỷ đồng) cho người được bảo hiểm
-baovietnhantho.com.vn
-. Khách hàng có thể điều chỉnh linh hoạt mức đóng phí từ năm thứ 5 trở đi và thay đổi số tiền bảo hiểm theo giai đoạn cuộc sống (ví dụ tăng SA khi có thêm thành viên, chuyển giai đoạn nghề nghiệp…). Đồng thời sản phẩm vẫn tích lũy lâu dài: nếu không có chi trả bảo vệ, người mua nhận 100% giá trị tài khoản khi đáo hạn
-baovietnhantho.com.vn
-. Điểm đặc biệt: tập trung bảo vệ cao và biến động linh hoạt, phù hợp với nhu cầu ưu tiên mức bảo vệ tối đa trong gia đình.
-Generali – Vita Ngày Mai Vững Chắc: Sản phẩm này ưu tiên “nền móng ổn định” và hỗ trợ dài lâu. Ưu điểm gồm tích lũy ổn định với lãi suất cam kết và “quà mừng hạnh phúc” (lên tới 25 triệu đồng) tại những cột mốc kỷ niệm đặc biệt
-generali.vn
-. Đặc biệt, Generali có quyền lợi gia đình: duy trì bảo vệ cho người thân thêm tới 5 năm sau sự kiện TTTBVV của người được bảo hiểm
-generali.vn
-, giúp người thân bớt gánh nặng về tài chính. Ngoài ra, kế hoạch đóng phí và đầu tư rất linh hoạt theo nhu cầu. Điểm khác: tích hợp các công cụ bảo vệ dài hạn, từ thế hệ đến thế hệ, với sự ổn định về lãi suất và quà thưởng hấp dẫn.
-Sun Life – Sun Vì Nhà Mình: Đặc điểm nổi bật là bảo vệ dài hạn vượt trội: hợp đồng có thể kéo dài đến tuổi 100
-acb.com.vn
-. Sản phẩm còn tự động tăng số tiền bảo hiểm tại các mốc lớn (kỷ niệm HĐ năm 10 và 20) mà không cần giám định
-acb.com.vn
-. Đầu tư được cam kết lãi suất và khách hàng nhận thêm “thưởng” khi đóng phí đúng hạn. Sản phẩm cũng linh hoạt rút tiền, đóng thêm và thay đổi mức bảo vệ bất kỳ lúc nào
-acb.com.vn
-. Ưu điểm khác: mở rộng bảo vệ đa thế hệ khi kết hợp với các sản phẩm khác. Tóm lại, Sun – Vì Nhà Mình phù hợp người mua muốn bảo vệ lâu dài, có thưởng và khả năng tăng SA tự động theo lộ trình.
-AIA – Khỏe Trọn Vẹn: Thiết kế cho thế hệ trung lưu, AIA – Khỏe Trọn Vẹn có ba phương án đóng phí (5, 15, 30 năm) với quyền lợi bảo vệ đến 30 năm. Điểm nhấn là AIA Vitality: thành viên đạt hạng Vàng/Bạch kim được tặng thêm lên đến 20% số tiền bảo hiểm cơ bản
-aia.com.vn
-. Nhờ vậy, hợp đồng tăng khả năng bảo vệ mà không tăng phí. Sản phẩm cam kết bảo vệ dài hạn (30 năm) và lãi suất quỹ LKC cam kết hấp dẫn. Nói chung, AIA nổi bật nhờ tích hợp quyền lợi sức khỏe (Vitality) vào UL, phù hợp khách hàng quan tâm sức khỏe lẫn tích lũy.
-Dai-ichi Life – An Tâm Song Hành Thịnh Vượng: Sản phẩm này tập trung cân bằng giữa bảo vệ và đầu tư. Ưu điểm gồm bảo vệ lên đến 150% STBH cho tử vong/TTTBVV
-dai-ichi-life.com.vn
- và “miễn phí thêm một người thân” được bảo hiểm tai nạn chết/nạn nhân
-dai-ichi-life.com.vn
-. Ngoài ra, HĐ có lãi suất cam kết và cho phép thay đổi linh hoạt kế hoạch bảo vệ – tích lũy. Điểm đặc biệt: khách hàng được tặng bảo vệ bổ sung cho người thân (hỗ trợ cả gia đình) và hưởng lãi đầu tư lâu dài.
-Lưu ý khi lựa chọn: Mỗi sản phẩm có các điều kiện khác nhau (tuổi tham gia, mức phí tối thiểu, lược bỏ bảo hiểm theo luật mới…). Người mua cần đọc kỹ “Quy tắc & Điều khoản” của từng sản phẩm để hiểu rõ quyền lợi và trách nhiệm. Bảng trên giúp nắm các điểm chính nhưng thông tin chi tiết như biểu phí, công thức tính bảo hiểm và loại trừ cụ thể phải tham khảo tài liệu chính thức của công ty bảo hiểm.
-Cân bằng bảo vệ + tích lũy (điều thiết thực nhất).
-Pru cho phép lựa chọn phương án bảo vệ rõ rệt (cơ bản / nâng cao), STBH có thể rất cao so với phí đóng — nghĩa là gia đình bạn được bảo vệ ngay cả khi AV chưa lớn. Với thu nhập ổn định, bạn đóng phí đều → vừa tích lũy được AV, vừa có STBH đủ để lo chi tiêu thiết yếu cho gia đình nếu xấu xảy ra.
+yhat = simple_lstm_model.predict(X_test_w).reshape(1, -1)[0]
+resultsDict['Tensorflow simple LSTM'] = evaluate(y_test, yhat)
+predictionsDict['Tensorflow simple LSTM'] = yhat
 
-Quyền lợi / thưởng duy trì rõ ràng, có giá trị thực tế sau vài năm.
-Có các khoản thưởng (ví dụ thưởng tri ân, retention bonus) giúp cải thiện hiệu quả hợp đồng nếu bạn giữ 5–10 năm — tức là trong chu kỳ 5 năm đầu, bạn đã bắt đầu thấy lợi ích thực tế hơn so với nhiều UL khác không có các bonus rõ ràng.
+đây là mô hình LSTM đơn giản, hiện tại mô hình này perform không tốt trên bộ dữ liệu của tôi, hãy cải thiện và tối ưu hóa mô hình tốt nhất có thể, sau đây là code XGBoost trên mô hình của tôi và đang perform tốt, hãy align mô hình deep learning hợp lí : 
+import pandas as pd
+import numpy as np
+from sklearn.metrics import mean_absolute_error, r2_score
+from xgboost import XGBRegressor
 
-Khả năng tăng SA không cần giám định trong trường hợp quan trọng.
-Đây là tính năng rất thực tế: khi thu nhập bạn tăng (lương lên, kết hôn, sinh con), bạn có thể tăng mức bảo hiểm mà không phải khám lại, bảo vệ kịp thời cho rủi ro gia đình.
+def smape(y_true, y_pred):
+    denom = (np.abs(y_true) + np.abs(y_pred))
+    denom = np.where(denom == 0, 1e-9, denom)
+    return 100 * np.mean(2.0 * np.abs(y_pred - y_true) / denom)
 
-Hệ sinh thái hỗ trợ & minh hoạ dễ xin (practical).
-Prudential có hệ thống tư vấn và minh hoạ số liệu chuyên nghiệp — bạn dễ yêu cầu illustration trực tiếp, so sánh được STBH và AV cho mức đóng bạn chọn. Điều này giúp quyết định dựa trên số thực (không chỉ lý thuyết).
+def nmae(y_true, y_pred):
+    return mean_absolute_error(y_true, y_pred) / (np.mean(np.abs(y_true)) + 1e-9)
 
-Rủi ro quản lý (phí / thanh khoản) có thể thao tác được.
-Với hợp đồng UL của Prudential, bạn có thể kiểm soát đóng thêm, rút 1 phần (theo điều khoản), và so sánh biểu phí — nghĩa là người đi làm ổn định có thể tối ưu trong 3–5 năm đầu mà không bị “khóa” hoàn toàn.
-AIA – Khỏe Trọn Vẹn: nếu bạn ưu tiên lợi ích sức khỏe ngay (Vitality) — được tăng STBH miễn phí khi sống khỏe, giảm chi phí khám chữa, có lợi trong 3–5 năm khi bạn còn trẻ và năng động.
+def duan_smearing_factor(y_log_true, y_log_pred):
+    resid = y_log_true - y_log_pred
+    return float(np.mean(np.exp(resid)))
 
-FWD – Bảo vệ gia tăng: nếu bạn ưu tiên thanh khoản / thao tác online / rút linh hoạt — thích hợp nếu bạn muốn giữ khả năng rút/điều chỉnh cao trong 3–5 năm tới.
-Vì sao AIA – Khỏe Trọn Vẹn là lựa chọn thay thế rất mạnh (gợi ý số 2)
+def inverse_log1p_with_smearing(y_log_pred, smear_factor=None):
+    if smear_factor is None:
+        return np.expm1(y_log_pred)
+    else:
+        return np.exp(y_log_pred) * smear_factor - 1.0
 
-AIA Vitality: chương trình “sống khỏe” đem lợi ích thực tế (tăng STBH lên đến +20% và ưu đãi khác) — tức là nếu bạn còn trẻ/khỏe và giữ lối sống lành mạnh, bạn được tăng bảo vệ mà không cần đóng thêm. Đây là giá trị “trực tiếp” dễ thấy trong 3–5 năm đầu. 
-AIA Việt Nam
-+1
+assert 'TransDate_dt' in df.columns and 'APE_Sub' in df.columns, "Thiếu cột 'TransDate_dt' hoặc 'APE_Sub' trong df"
+df['TransDate_dt'] = pd.to_datetime(df['TransDate_dt'], format='%Y-%m-%d')
 
-Đóng phí linh hoạt (có lựa chọn đóng ngắn hạn): nếu bạn muốn đóng gọn (ví dụ 5 năm) rồi tập trung vào nghề nghiệp, AIA có phương án phù hợp giúp bạn được bảo vệ dài hạn. 
-AIA Việt Nam
+group_cols = ['OfficeID'] if 'OfficeID' in df.columns else []
 
-4) Tại sao FWD – Bảo vệ Gia tăng là lựa chọn thay thế nếu bạn ưu tính linh hoạt/liquid
+agg_cols = {'APE_Sub': 'sum'}
+df_agg = df.groupby(group_cols + ['TransDate_dt'], as_index=False).agg(agg_cols)
 
-FWD nổi tiếng mua trực tuyến, rút tiền linh hoạt, giao dịch đơn giản, và thường có quyền lợi TTTBVV cao/thiết kế hấp dẫn cho người cần thanh khoản. Nếu bạn cần dễ chuyển đổi, giải ngân nhanh hoặc muốn rút/đóng gói linh hoạt trong 3–5 năm đầu, FWD phù hợp.
+def make_daily_features(g, target_col='APE_Sub'):
+    g = g.set_index('TransDate_dt').sort_index()
+    g = g.resample('D').sum()
+    lag_days = [7, 30, 90]
+    for lag in lag_days:
+        g[f'lag_{lag}d'] = g[target_col].shift(lag)
+    rolling_windows = [7, 30]
+    for w in rolling_windows:
+        g[f'rolling_mean_{w}d'] = g[target_col].shift(1).rolling(w).mean()
+        g[f'rolling_sum_{w}d']  = g[target_col].shift(1).rolling(w).sum()
+    g['diff_7d'] = g[target_col].shift(1).diff(7)
+    g['diff_30d'] = g[target_col].shift(1).diff(30)
+    g = g.reset_index()
+    g['day_of_week'] = g['TransDate_dt'].dt.dayofweek
+    g['is_weekend']  = g['day_of_week'].isin([5, 6]).astype(int)
+    g['month']       = g['TransDate_dt'].dt.month
+    g['quarter']     = g['TransDate_dt'].dt.quarter
+    return g
+
+if group_cols:
+    df_daily = (
+        df_agg
+        .groupby(group_cols, group_keys=True)
+        .apply(lambda g: make_daily_features(g, target_col='APE_Sub'))
+        .reset_index(level=group_cols)
+    )
+else:
+    df_daily = make_daily_features(df_agg, target_col='APE_Sub')
+
+df_model = df_daily.copy()
+df_model = df_model[df_model['APE_Sub'] > 0].copy()
+
+q1 = df_model['APE_Sub'].quantile(0.01)
+q3 = df_model['APE_Sub'].quantile(0.99)
+lower = q1
+upper = q3
+df_model = df_model[(df_model['APE_Sub'] >= lower) & (df_model['APE_Sub'] <= upper)].copy()
+
+sort_cols = (group_cols + ['TransDate_dt']) if 'TransDate_dt' in df_model.columns else list(df_model.columns)
+df_model_sorted = df_model.sort_values(sort_cols).copy()
+
+# Chia dữ liệu 80/20 theo thứ tự thời gian (train/test)
+n = len(df_model_sorted)
+train_end = int(n * 0.80)
+df_train = df_model_sorted.iloc[:train_end].copy()
+df_test  = df_model_sorted.iloc[train_end:].copy()
+
+lag_cols = ['lag_7d', 'lag_30d', 'lag_90d']
+rolling_cols = ['rolling_mean_7d', 'rolling_sum_7d', 'rolling_mean_30d', 'rolling_sum_30d']
+dropna_cols = lag_cols + rolling_cols
+
+df_train = df_train.dropna(subset=dropna_cols).copy()
+df_test  = df_test.dropna(subset=dropna_cols).copy()
+
+y_train = np.log1p(df_train['APE_Sub'])
+y_test  = np.log1p(df_test['APE_Sub'])
+
+drop_cols = ['APE_Sub', 'TransDate_dt']
+X_train = df_train.drop(columns=[c for c in drop_cols if c in df_train.columns]).copy()
+X_test  = df_test.drop(columns=[c for c in drop_cols if c in df_test.columns]).copy()
+
+X_train.columns = X_train.columns.str.replace(r'\s+', '_', regex=True)
+X_test.columns  = X_test.columns.str.replace(r'\s+', '_', regex=True)
+
+reg = XGBRegressor(
+    objective='reg:squarederror',
+    n_estimators=100,
+    learning_rate=0.1,
+    max_depth=3,
+    subsample=0.7,
+    colsample_bytree=1.0,
+    reg_lambda=1.0,
+    reg_alpha=0.5,
+    min_child_weight=1,
+    gamma=0,
+    tree_method='hist',
+    grow_policy='lossguide',
+    max_bin=256,
+    n_jobs=-1,
+    random_state=42
+)
+
+reg.fit(X_train, y_train)
+
+y_test_pred_log = reg.predict(X_test)
+y_train_pred_log = reg.predict(X_train)
+smear_xgb = duan_smearing_factor(y_train, y_train_pred_log)
+
+y_test_pred = inverse_log1p_with_smearing(y_test_pred_log, smear_xgb)
+y_test_true = np.expm1(y_test)
+
+mae_xgb_test  = mean_absolute_error(y_test_true, y_test_pred)
+r2_xgb_test   = r2_score(y_test_true, y_test_pred)
+smape_xgb_test  = smape(y_test_true, y_test_pred)
+
+print(f"[TEST] XGB  MAE: {mae_xgb_test:,.2f} | R²: {r2_xgb_test:.4f} | sMAPE: {smape_xgb_test:.2f}%")
